@@ -645,8 +645,8 @@ func apply_upgrade(upgrade_id: String) -> void:
 func _return_entity_to_pool(entity: Area2D) -> void:
 	entity.hide()
 	entity.set_process(false)
-	entity.monitoring = false
-	entity.monitorable = false
+	entity.set_deferred("monitoring", false)
+	entity.set_deferred("monitorable", false)
 
 func get_absorption_radius() -> float:
 	return player_radius * (1.2 + absorption_radius_bonus)

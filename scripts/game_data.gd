@@ -3,10 +3,7 @@ extends Node
 # GameData autoload singleton — persistent game state
 
 signal scale_changed(new_scale_index: int)
-signal player_died(stats: Dictionary)
-signal score_updated(mass: float)
 signal hp_changed(new_hp: int)
-signal combo_updated(combo: int, multiplier: float)
 
 # Current run state
 var current_scale: int = 0  # 0=Subatomic, 1=Atomic, 2=Molecular, 3=Cellular, 4=Planetary
