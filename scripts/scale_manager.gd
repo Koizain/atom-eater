@@ -53,11 +53,11 @@ func _do_dramatic_transition(new_scale: int) -> void:
 	# Step 3: Camera zooms out dramatically
 	if camera:
 		var tween: Tween = tree.create_tween()
-		tween.tween_property(camera, "zoom", Vector2(0.35, 0.35), 0.7).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		tween.tween_property(camera, "base_zoom", 0.35, 0.7).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 		tween.tween_interval(0.4)
 		tween.tween_callback(_apply_scale_change.bind(new_scale))
 		# Step 4: "SCALE UP!" text appears — handled by signal in main.gd
-		tween.tween_property(camera, "zoom", Vector2(1.0, 1.0), 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_CUBIC)
+		tween.tween_property(camera, "base_zoom", 1.0, 0.6).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_CUBIC)
 		tween.tween_callback(_finish_transition.bind(new_scale))
 	else:
 		_apply_scale_change(new_scale)

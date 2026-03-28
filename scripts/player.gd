@@ -26,6 +26,12 @@ var dash_cooldown_timer: float = 0.0
 var dash_direction: Vector2 = Vector2.ZERO
 var is_dead: bool = false
 
+# Dash juice
+var _dash_freeze: bool = false
+var _afterimage_timer: float = 0.0
+const AFTERIMAGE_INTERVAL: float = 0.045
+var _trail_target_width: float = 4.0
+
 # Size
 var player_radius: float = GameData.PLAYER_START_RADIUS
 var combo_count: int = 0
@@ -80,14 +86,13 @@ func _process(delta: float) -> void:
 	_handle_eat_pop(delta)
 	_handle_trail(delta)
 	_handle_hit_invincibility(delta)
+	_handle_afterimages(delta)
 	_check_scale_transition()
 
-	# Rotation based on movement direction
-	if velocity.length() > 10.0:
-		var target_rot: float = velocity.angle()
-		rotation = lerp_angle(rotation, target_rot, 3.0 * delta)
-
 func _handle_movement(delta: float) -> void:
+	if _dash_freeze:
+		return
+
 	var mouse_pos: Vector2 = get_global_mouse_position()
 	var direction: Vector2 = (mouse_pos - global_position)
 	var dist: float = direction.length()
@@ -101,6 +106,7 @@ func _handle_movement(delta: float) -> void:
 		dash_timer -= delta
 		if dash_timer <= 0.0:
 			is_dashing = false
+			_trail_target_width = 4.0
 		else:
 			velocity = dash_direction * DASH_SPEED * speed_mult
 	else:
@@ -155,11 +161,13 @@ func _handle_eat_pop(delta: float) -> void:
 func _handle_trail(delta: float) -> void:
 	if not trail_line:
 		return
+
+	# Smooth trail width transitions (wider during dash)
+	trail_line.width = lerpf(trail_line.width, _trail_target_width, 10.0 * delta)
+
 	trail_timer -= delta
 	if trail_timer <= 0.0 and velocity.length() > 20.0:
 		trail_timer = TRAIL_POINT_INTERVAL
-		# Trail points are in local space relative to parent, but we want world positions
-		# Since trail_line is a child, we use relative positions
 		trail_line.add_point(Vector2.ZERO)
 		if trail_line.get_point_count() > TRAIL_MAX_POINTS:
 			trail_line.remove_point(0)
@@ -170,8 +178,17 @@ func _handle_trail(delta: float) -> void:
 		pt -= velocity * delta  # Counter-move to stay in world space
 		trail_line.set_point_position(i, pt)
 
-	# Update trail color
-	trail_line.default_color = GameData.get_scale_color()
+	# Trail color: brighter and more opaque during dash
+	var base_color: Color = GameData.get_scale_color()
+	if is_dashing:
+		trail_line.default_color = Color(
+			minf(base_color.r + 0.4, 1.0),
+			minf(base_color.g + 0.4, 1.0),
+			minf(base_color.b + 0.4, 1.0),
+			0.8
+		)
+	else:
+		trail_line.default_color = base_color
 
 func _handle_hit_invincibility(delta: float) -> void:
 	if hit_invincible_timer > 0.0:
@@ -182,6 +199,18 @@ func _handle_hit_invincibility(delta: float) -> void:
 	elif circle_draw and circle_draw.modulate.a != 1.0:
 		circle_draw.modulate.a = 1.0
 
+func _handle_afterimages(delta: float) -> void:
+	if is_dashing:
+		_afterimage_timer -= delta
+		if _afterimage_timer <= 0.0:
+			_afterimage_timer = AFTERIMAGE_INTERVAL
+			_spawn_afterimage()
+
+func _spawn_afterimage() -> void:
+	if get_parent() and get_parent().has_method("add_afterimage"):
+		var color: Color = GameData.get_scale_color()
+		get_parent().add_afterimage(global_position, player_radius, color)
+
 func _unhandled_input(event: InputEvent) -> void:
 	if is_dead:
 		return
@@ -191,16 +220,36 @@ func _unhandled_input(event: InputEvent) -> void:
 			_try_dash()
 
 func _try_dash() -> void:
-	if dash_cooldown_timer > 0.0 or is_dashing:
+	if dash_cooldown_timer > 0.0 or is_dashing or _dash_freeze:
 		return
 	var mouse_pos: Vector2 = get_global_mouse_position()
 	dash_direction = (mouse_pos - global_position).normalized()
 	if dash_direction == Vector2.ZERO:
 		dash_direction = Vector2.RIGHT
+
+	# Freeze frame before dash — brief time-slow for punch
+	_dash_freeze = true
+	Engine.time_scale = 0.1
+	get_tree().create_timer(0.05, true, false, true).timeout.connect(_launch_dash)
+
+func _launch_dash() -> void:
+	Engine.time_scale = 1.0
+	_dash_freeze = false
+
+	if is_dead:
+		return
+
 	is_dashing = true
 	dash_timer = DASH_DURATION
 	var effective_cooldown: float = DASH_COOLDOWN * (1.0 - dash_cooldown_reduction)
 	dash_cooldown_timer = max(0.3, effective_cooldown)
+	_afterimage_timer = 0.0
+
+	# Widen trail during dash
+	_trail_target_width = 12.0
+
+	# Dash screen shake
+	_shake(8.0, 0.15)
 
 func _on_area_entered(area: Area2D) -> void:
 	if is_dead:
@@ -248,9 +297,31 @@ func _absorb_entity(entity: Area2D, entity_radius: float) -> void:
 	# Eat pop effect
 	eat_pop_timer = 0.15
 
-	# Check if it was a big eat (>0.7x player size)
+	# Tiered eat impact based on size ratio
 	var size_ratio: float = entity_radius / player_radius
-	var is_big_eat: bool = size_ratio > 0.7
+	var entity_pos: Vector2 = entity.global_position
+
+	if size_ratio > 0.7:
+		# BOOM — large eat: freeze frame, heavy shake, zoom punch, shockwave
+		_freeze_frame(0.06)
+		_shake(16.0, 0.4)
+		_screen_pulse()
+		var cam: Camera2D = get_viewport().get_camera_2d()
+		if cam and cam.has_method("zoom_punch"):
+			cam.zoom_punch(0.05)
+		if get_parent() and get_parent().has_method("spawn_shockwave"):
+			get_parent().spawn_shockwave(entity_pos)
+	elif size_ratio > 0.35:
+		# Crunch — medium eat: moderate shake, small zoom punch
+		_shake(6.0, 0.2)
+		var cam: Camera2D = get_viewport().get_camera_2d()
+		if cam and cam.has_method("zoom_punch"):
+			cam.zoom_punch(0.02)
+	else:
+		# Pop — small eat: tiny zoom nudge (eat_pop handles the rest)
+		var cam: Camera2D = get_viewport().get_camera_2d()
+		if cam and cam.has_method("zoom_punch"):
+			cam.zoom_punch(0.008)
 
 	eaten_entity.emit(mass_gain)
 	_update_radius()
@@ -261,16 +332,19 @@ func _absorb_entity(entity: Area2D, entity_radius: float) -> void:
 		var text: String = "+%.0f" % mass_gain
 		if multiplier > 1.0:
 			text = "+%.0f x%.1f" % [mass_gain, multiplier]
-		get_parent().spawn_floating_text(entity.global_position, text, is_big_eat)
-
-	# Big eat screen pulse
-	if is_big_eat:
-		_screen_pulse()
+		get_parent().spawn_floating_text(entity_pos, text, size_ratio > 0.7)
 
 	_return_entity_to_pool(entity)
 
+func _freeze_frame(real_duration: float) -> void:
+	if Engine.time_scale < 0.5:
+		return  # Already in a freeze — don't stack
+	Engine.time_scale = 0.05
+	get_tree().create_timer(real_duration, true, false, true).timeout.connect(
+		func(): Engine.time_scale = 1.0
+	)
+
 func _screen_pulse() -> void:
-	# Tell main to do a screen flash
 	if get_parent() and get_parent().has_method("screen_flash"):
 		get_parent().screen_flash(Color(1, 1, 1, 0.3), 0.2)
 
@@ -315,6 +389,9 @@ func _die() -> void:
 		return
 	is_dead = true
 	GameData.deaths_this_session += 1
+
+	# Restore time scale in case we're mid-freeze
+	Engine.time_scale = 1.0
 
 	# Death implosion animation
 	if circle_draw:

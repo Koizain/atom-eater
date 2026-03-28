@@ -24,6 +24,12 @@ var star_parallax_factor: float = 0.1
 var floating_texts: Array[Label] = []
 const FLOAT_TEXT_POOL_SIZE: int = 15
 
+# Afterimage system — drawn in _draw(), no extra nodes
+var afterimages: Array[Dictionary] = []
+
+# Shockwave system — expanding rings drawn in _draw()
+var shockwaves: Array[Dictionary] = []
+
 # Background colors per scale
 const BG_COLORS: Array[Color] = [
 	Color(0.039, 0.039, 0.059),   # Subatomic
@@ -53,6 +59,9 @@ func _ready() -> void:
 	# Wire entity spawner
 	entity_spawner.player = player
 
+	# Wire camera to follow player with lag
+	camera.target = player
+
 	set_process(true)
 
 	game_over_screen.hide()
@@ -71,10 +80,46 @@ func _process(delta: float) -> void:
 	if is_game_over:
 		return
 
-	# Keep camera following player
-	camera.global_position = player.global_position
+	# Camera follow is handled by camera.gd via target
 
+	_update_afterimages(delta)
+	_update_shockwaves(delta)
 	_update_background()
+
+# ── Afterimage system ──────────────────────────────────────────────
+
+func add_afterimage(pos: Vector2, radius: float, color: Color) -> void:
+	afterimages.append({
+		"position": pos,
+		"radius": radius,
+		"color": color,
+		"timer": 0.3,
+		"lifetime": 0.3,
+	})
+
+func _update_afterimages(delta: float) -> void:
+	for i in range(afterimages.size() - 1, -1, -1):
+		afterimages[i].timer -= delta
+		if afterimages[i].timer <= 0.0:
+			afterimages.remove_at(i)
+
+# ── Shockwave system ──────────────────────────────────────────────
+
+func spawn_shockwave(pos: Vector2) -> void:
+	shockwaves.append({
+		"position": pos,
+		"radius": 0.0,
+		"max_radius": 200.0,
+		"speed": 600.0,
+	})
+
+func _update_shockwaves(delta: float) -> void:
+	for i in range(shockwaves.size() - 1, -1, -1):
+		shockwaves[i].radius += shockwaves[i].speed * delta
+		if shockwaves[i].radius >= shockwaves[i].max_radius:
+			shockwaves.remove_at(i)
+
+# ── Drawing ────────────────────────────────────────────────────────
 
 func _draw() -> void:
 	# Draw parallax stars
@@ -93,11 +138,30 @@ func _draw() -> void:
 		var size: float = star_sizes[i]
 		draw_circle(parallax_pos, size, Color(0.8, 0.85, 1.0, brightness * 0.5))
 
+	# Draw afterimages (dash ghosts)
+	for ai in afterimages:
+		var c: Color = ai.color
+		var t: float = ai.timer / ai.lifetime
+		var a: float = t * 0.6  # Fades from 0.6 to 0
+		var r: float = ai.radius
+		draw_circle(ai.position, r * 1.3, Color(c.r, c.g, c.b, a * 0.12))
+		draw_circle(ai.position, r, Color(c.r, c.g, c.b, a * 0.35))
+		draw_circle(ai.position, r * 0.5, Color(c.r, c.g, c.b, a * 0.55))
+
+	# Draw shockwaves (expanding rings)
+	for sw in shockwaves:
+		var t: float = 1.0 - (sw.radius / sw.max_radius)
+		var sc: Color = GameData.get_scale_color()
+		draw_arc(sw.position, sw.radius, 0.0, TAU, 64, Color(sc.r, sc.g, sc.b, t * 0.5), 3.0)
+		draw_arc(sw.position, sw.radius * 0.85, 0.0, TAU, 48, Color(1.0, 1.0, 1.0, t * 0.25), 1.5)
+
+# ── Background & stars ─────────────────────────────────────────────
+
 func _update_background() -> void:
 	if background and GameData.current_scale < BG_COLORS.size():
 		var target_color: Color = BG_COLORS[GameData.current_scale]
 		background.color = background.color.lerp(target_color, 0.02)
-	queue_redraw()  # Redraw stars
+	queue_redraw()  # Redraw stars, afterimages, shockwaves
 
 func _generate_stars() -> void:
 	star_positions.clear()
@@ -110,6 +174,8 @@ func _generate_stars() -> void:
 		))
 		star_sizes.append(randf_range(0.5, 2.0))
 		star_brightnesses.append(randf_range(0.3, 1.0))
+
+# ── Floating text pool ─────────────────────────────────────────────
 
 func _create_floating_text_pool() -> void:
 	var overlay: CanvasLayer = $UIOverlay
@@ -156,6 +222,8 @@ func spawn_floating_text(world_pos: Vector2, text: String, is_big: bool) -> void
 	if is_big:
 		tween.tween_property(label, "scale", Vector2(1.3, 1.3), 0.15)
 
+# ── Screen flash ───────────────────────────────────────────────────
+
 func screen_flash(color: Color, duration: float) -> void:
 	if not screen_flash_rect:
 		return
@@ -164,10 +232,10 @@ func screen_flash(color: Color, duration: float) -> void:
 	var tween: Tween = create_tween()
 	tween.tween_property(screen_flash_rect, "modulate:a", 0.0, duration).set_ease(Tween.EASE_OUT)
 
-func _on_player_eaten(mass_gained: float) -> void:
-	# Camera punch proportional to mass gained
-	var punch_amount: float = clamp(mass_gained * 0.002, 0.01, 0.04)
-	_camera_punch(punch_amount)
+# ── Signal handlers ────────────────────────────────────────────────
+
+func _on_player_eaten(_mass_gained: float) -> void:
+	pass  # Tiered eat effects handled directly in player.gd
 
 func _on_transition_started(new_scale: int) -> void:
 	# Flash scale transition label — "SCALE UP!"
@@ -184,7 +252,7 @@ func _on_transition_started(new_scale: int) -> void:
 	# Screen shake
 	shake_camera(15.0, 0.7)
 
-func _on_transition_finished(new_scale: int) -> void:
+func _on_transition_finished(_new_scale: int) -> void:
 	_update_background()
 
 func _on_player_died() -> void:
@@ -200,23 +268,5 @@ func _on_player_died() -> void:
 	game_over_screen.show()
 
 func shake_camera(strength: float, duration: float) -> void:
-	if not camera:
-		return
-	var tween: Tween = create_tween()
-	var steps: int = int(duration / 0.05)
-	for i in range(steps):
-		var t: float = float(i) / float(steps)
-		var s: float = strength * (1.0 - t)
-		var offset: Vector2 = Vector2(
-			randf_range(-s, s),
-			randf_range(-s, s)
-		)
-		tween.tween_property(camera, "offset", offset, 0.05)
-	tween.tween_property(camera, "offset", Vector2.ZERO, 0.05)
-
-func _camera_punch(amount: float) -> void:
-	if not camera:
-		return
-	var tween: Tween = create_tween()
-	tween.tween_property(camera, "zoom", Vector2(1.0 + amount, 1.0 + amount), 0.06)
-	tween.tween_property(camera, "zoom", Vector2(1.0, 1.0), 0.12)
+	if camera:
+		camera.shake(strength, duration)
