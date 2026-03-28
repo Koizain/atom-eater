@@ -203,7 +203,7 @@ func _show_upgrade_selection() -> void:
 	get_tree().paused = true
 	upgrade_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
 
-func _create_upgrade_card(upg: Dictionary, index: int) -> Panel:
+func _create_upgrade_card(upg: Dictionary, _index: int) -> Panel:
 	var card: Panel = Panel.new()
 	card.custom_minimum_size = Vector2(250, 160)
 	card.process_mode = Node.PROCESS_MODE_ALWAYS

@@ -51,10 +51,6 @@ add_theme_stylebox_override("panel", SubResource("StyleBoxFlat_panel"))
 
 [node name="InnerBox" type="VBoxContainer" parent="CenterContainer/VBoxContainer/Panel"]
 theme_override_constants/separation = 16
-offset_left = 40.0
-offset_top = 40.0
-offset_right = -40.0
-offset_bottom = -40.0
 
 [node name="TitleLabel" type="Label" parent="CenterContainer/VBoxContainer/Panel/InnerBox"]
 text = "YOU WERE EATEN"
@@ -83,7 +79,7 @@ theme_override_colors/font_color = Color(1.0, 0.85, 0.1, 1.0)
 horizontal_alignment = 1
 
 [node name="FragmentsLabel" type="Label" parent="CenterContainer/VBoxContainer/Panel/InnerBox"]
-text = "⬡ Color Fragments earned: 0"
+text = "Color Fragments: 0"
 theme_override_font_sizes/font_size = 22
 theme_override_colors/font_color = Color(0.9, 0.5, 1.0, 1.0)
 horizontal_alignment = 1

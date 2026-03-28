@@ -252,7 +252,7 @@ func _handle_hunger_burst(delta: float) -> void:
 	if hunger_burst_timer > 0.0:
 		hunger_burst_timer -= delta
 
-func _handle_magnetism(delta: float) -> void:
+func _handle_magnetism(_delta: float) -> void:
 	if not has_magnetism:
 		return
 	if not entity_spawner or not is_instance_valid(entity_spawner):

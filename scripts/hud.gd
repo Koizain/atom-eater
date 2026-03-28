@@ -130,10 +130,10 @@ func _update_hp_display() -> void:
 			tween.tween_property(hp_circles[i], "scale", Vector2(1.4, 1.4), 0.1)
 			tween.tween_property(hp_circles[i], "scale", Vector2(1.0, 1.0), 0.2)
 
-func _on_hp_changed(new_hp: int) -> void:
+func _on_hp_changed(_new_hp: int) -> void:
 	_update_hp_display()
 
-func _on_scale_changed(new_scale: int) -> void:
+func _on_scale_changed(_new_scale: int) -> void:
 	flash_timer = 0.5
 	if scale_flash:
 		scale_flash.modulate.a = 0.7
