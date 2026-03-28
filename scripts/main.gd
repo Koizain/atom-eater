@@ -12,13 +12,31 @@ extends Node2D
 
 var is_game_over: bool = false
 
-# Parallax stars
-var star_positions: Array[Vector2] = []
-var star_sizes: Array[float] = []
-var star_brightnesses: Array[float] = []
-const STAR_COUNT: int = 120
-const STAR_FIELD_SIZE: float = 2400.0
-var star_parallax_factor: float = 0.1
+# ── Parallax star system (3 layers) ──────────────────────────────
+# Layer 0: distant (tiny, slow), Layer 1: mid, Layer 2: near (larger, fast)
+const STAR_COUNTS: Array[int] = [80, 50, 30]
+const STAR_PARALLAX: Array[float] = [0.03, 0.08, 0.18]
+const STAR_SIZE_MIN: Array[float] = [0.3, 0.8, 1.5]
+const STAR_SIZE_MAX: Array[float] = [0.8, 1.8, 3.0]
+const STAR_BRIGHTNESS_MIN: Array[float] = [0.15, 0.25, 0.4]
+const STAR_BRIGHTNESS_MAX: Array[float] = [0.4, 0.65, 1.0]
+const STAR_COLORS: Array[Color] = [
+	Color(0.6, 0.65, 0.9),   # Distant: cool blue-white
+	Color(0.75, 0.8, 1.0),   # Mid: white-blue
+	Color(0.9, 0.92, 1.0),   # Near: bright white
+]
+const STAR_FIELD_SIZE: float = 2800.0
+
+var star_layers: Array[Array] = [[], [], []]  # Each: Array of {pos, size, brightness, phase}
+
+# Shooting star system
+var shooting_stars: Array[Dictionary] = []
+var shooting_star_timer: float = 0.0
+const SHOOTING_STAR_INTERVAL_MIN: float = 8.0
+const SHOOTING_STAR_INTERVAL_MAX: float = 15.0
+
+# Nebula wisps
+var nebula_wisps: Array[Dictionary] = []
 
 # Floating text pool
 var floating_texts: Array[Label] = []
@@ -30,13 +48,19 @@ var afterimages: Array[Dictionary] = []
 # Shockwave system — expanding rings drawn in _draw()
 var shockwaves: Array[Dictionary] = []
 
-# Background colors per scale
+# Death particle system
+var death_particles: Array[Dictionary] = []
+
+# Entity sparkle trails
+var sparkle_trails: Array[Dictionary] = []
+
+# Background colors per scale — deep space feel (NOT pure black)
 const BG_COLORS: Array[Color] = [
-	Color(0.039, 0.039, 0.059),   # Subatomic
-	Color(0.02, 0.05, 0.04),      # Atomic
-	Color(0.05, 0.02, 0.06),      # Molecular
-	Color(0.04, 0.02, 0.03),      # Cellular
-	Color(0.02, 0.02, 0.05),      # Planetary
+	Color(0.020, 0.020, 0.063),   # Subatomic: deep blue-black
+	Color(0.015, 0.040, 0.035),   # Atomic: dark teal
+	Color(0.040, 0.015, 0.050),   # Molecular: dark purple
+	Color(0.035, 0.015, 0.028),   # Cellular: dark rose
+	Color(0.018, 0.018, 0.050),   # Planetary: deep indigo
 ]
 
 func _ready() -> void:
@@ -74,16 +98,20 @@ func _ready() -> void:
 
 	_update_background()
 	_generate_stars()
+	_generate_nebula_wisps()
 	_create_floating_text_pool()
+	shooting_star_timer = randf_range(SHOOTING_STAR_INTERVAL_MIN, SHOOTING_STAR_INTERVAL_MAX)
 
 func _process(delta: float) -> void:
 	if is_game_over:
 		return
 
-	# Camera follow is handled by camera.gd via target
-
 	_update_afterimages(delta)
 	_update_shockwaves(delta)
+	_update_shooting_stars(delta)
+	_update_nebula_wisps(delta)
+	_update_death_particles(delta)
+	_update_sparkle_trails(delta)
 	_update_background()
 
 # ── Afterimage system ──────────────────────────────────────────────
@@ -119,30 +147,132 @@ func _update_shockwaves(delta: float) -> void:
 		if shockwaves[i].radius >= shockwaves[i].max_radius:
 			shockwaves.remove_at(i)
 
+# ── Death particle system ─────────────────────────────────────────
+
+func spawn_death_particles(pos: Vector2, color: Color, radius: float) -> void:
+	var count: int = randi_range(4, 6)
+	for i in range(count):
+		var angle: float = randf() * TAU
+		var speed: float = randf_range(80.0, 220.0)
+		var frag_size: float = radius * randf_range(0.15, 0.35)
+		death_particles.append({
+			"position": pos,
+			"velocity": Vector2(cos(angle), sin(angle)) * speed,
+			"color": color,
+			"size": frag_size,
+			"timer": randf_range(0.4, 0.8),
+			"lifetime": 0.8,
+			"rotation": randf() * TAU,
+			"rot_speed": randf_range(-8.0, 8.0),
+		})
+
+func _update_death_particles(delta: float) -> void:
+	for i in range(death_particles.size() - 1, -1, -1):
+		var p: Dictionary = death_particles[i]
+		p.timer -= delta
+		p.position += p.velocity * delta
+		p.velocity *= 0.96  # drag
+		p.rotation += p.rot_speed * delta
+		p.size *= 0.98  # shrink
+		if p.timer <= 0.0:
+			death_particles.remove_at(i)
+
+# ── Sparkle trail system ──────────────────────────────────────────
+
+func add_sparkle(pos: Vector2, color: Color) -> void:
+	sparkle_trails.append({
+		"position": pos + Vector2(randf_range(-3, 3), randf_range(-3, 3)),
+		"color": color,
+		"size": randf_range(1.0, 2.5),
+		"timer": randf_range(0.15, 0.3),
+		"lifetime": 0.3,
+	})
+
+func _update_sparkle_trails(delta: float) -> void:
+	for i in range(sparkle_trails.size() - 1, -1, -1):
+		sparkle_trails[i].timer -= delta
+		if sparkle_trails[i].timer <= 0.0:
+			sparkle_trails.remove_at(i)
+
 # ── Drawing ────────────────────────────────────────────────────────
 
 func _draw() -> void:
-	# Draw parallax stars
 	var cam_pos: Vector2 = camera.global_position if camera else Vector2.ZERO
-	for i in range(star_positions.size()):
-		var star_pos: Vector2 = star_positions[i]
-		# Parallax offset
-		var parallax_pos: Vector2 = star_pos - cam_pos * star_parallax_factor
-		# Wrap stars
-		parallax_pos.x = fmod(parallax_pos.x + STAR_FIELD_SIZE, STAR_FIELD_SIZE * 2.0) - STAR_FIELD_SIZE + cam_pos.x
-		parallax_pos.y = fmod(parallax_pos.y + STAR_FIELD_SIZE, STAR_FIELD_SIZE * 2.0) - STAR_FIELD_SIZE + cam_pos.y
 
-		var brightness: float = star_brightnesses[i]
-		# Subtle twinkle
-		brightness *= (0.7 + 0.3 * sin(Time.get_ticks_msec() * 0.001 * (1.0 + i * 0.1)))
-		var size: float = star_sizes[i]
-		draw_circle(parallax_pos, size, Color(0.8, 0.85, 1.0, brightness * 0.5))
+	# Draw nebula wisps (behind stars)
+	for neb in nebula_wisps:
+		var npos: Vector2 = neb.position - cam_pos * 0.02
+		# Wrap nebula
+		npos.x = fmod(npos.x + STAR_FIELD_SIZE, STAR_FIELD_SIZE * 2.0) - STAR_FIELD_SIZE + cam_pos.x
+		npos.y = fmod(npos.y + STAR_FIELD_SIZE, STAR_FIELD_SIZE * 2.0) - STAR_FIELD_SIZE + cam_pos.y
+		var nc: Color = neb.color
+		var breath: float = 0.7 + 0.3 * sin(Time.get_ticks_msec() * 0.0003 + neb.phase)
+		# Draw as layered soft circles for nebula cloud effect
+		var nr: float = neb.radius
+		draw_circle(npos, nr * 1.2, Color(nc.r, nc.g, nc.b, 0.012 * breath))
+		draw_circle(npos, nr, Color(nc.r, nc.g, nc.b, 0.025 * breath))
+		draw_circle(npos, nr * 0.7, Color(nc.r, nc.g, nc.b, 0.04 * breath))
+		draw_circle(npos, nr * 0.4, Color(nc.r, nc.g, nc.b, 0.05 * breath))
+
+	# Draw parallax stars (3 layers: distant, mid, near)
+	for layer_idx in range(3):
+		var parallax: float = STAR_PARALLAX[layer_idx]
+		var base_color: Color = STAR_COLORS[layer_idx]
+		for star in star_layers[layer_idx]:
+			var star_pos: Vector2 = star.pos - cam_pos * parallax
+			# Wrap stars
+			star_pos.x = fmod(star_pos.x + STAR_FIELD_SIZE, STAR_FIELD_SIZE * 2.0) - STAR_FIELD_SIZE + cam_pos.x
+			star_pos.y = fmod(star_pos.y + STAR_FIELD_SIZE, STAR_FIELD_SIZE * 2.0) - STAR_FIELD_SIZE + cam_pos.y
+
+			# Twinkle: random-phase flicker
+			var twinkle: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.002 * star.twinkle_speed + star.phase)
+			var brightness: float = star.brightness * twinkle
+			var size: float = star.size * (0.85 + 0.15 * twinkle)
+
+			var sc: Color = Color(base_color.r, base_color.g, base_color.b, brightness)
+			# Near stars get a tiny glow halo
+			if layer_idx == 2:
+				draw_circle(star_pos, size * 2.5, Color(sc.r, sc.g, sc.b, brightness * 0.08))
+			draw_circle(star_pos, size, sc)
+
+	# Draw shooting stars
+	for ss in shooting_stars:
+		var t: float = ss.timer / ss.lifetime
+		var head_alpha: float = t
+		var head_pos: Vector2 = ss.position
+		# Draw streak tail
+		var tail_len: int = 8
+		for i in range(tail_len):
+			var frac: float = float(i) / float(tail_len)
+			var tail_pos: Vector2 = head_pos - ss.velocity.normalized() * (frac * ss.trail_length)
+			var tail_alpha: float = head_alpha * (1.0 - frac) * 0.6
+			var tail_size: float = ss.size * (1.0 - frac * 0.7)
+			draw_circle(tail_pos, tail_size, Color(0.9, 0.95, 1.0, tail_alpha))
+		# Bright head
+		draw_circle(head_pos, ss.size * 1.3, Color(1.0, 1.0, 1.0, head_alpha))
+
+	# Draw sparkle trails
+	for sp in sparkle_trails:
+		var t: float = sp.timer / sp.lifetime
+		var sc: Color = sp.color
+		draw_circle(sp.position, sp.size * t, Color(sc.r, sc.g, sc.b, t * 0.7))
+		draw_circle(sp.position, sp.size * t * 0.5, Color(1.0, 1.0, 1.0, t * 0.5))
+
+	# Draw death particles
+	for dp in death_particles:
+		var t: float = dp.timer / dp.lifetime
+		var dc: Color = dp.color
+		# Draw as small rotated fragment (diamond shape using two triangles via circles for simplicity)
+		draw_circle(dp.position, dp.size * t, Color(dc.r, dc.g, dc.b, t * 0.9))
+		draw_circle(dp.position, dp.size * t * 0.5, Color(1.0, 1.0, 1.0, t * 0.6))
+		# Tiny glow around fragment
+		draw_circle(dp.position, dp.size * t * 2.0, Color(dc.r, dc.g, dc.b, t * 0.15))
 
 	# Draw afterimages (dash ghosts)
 	for ai in afterimages:
 		var c: Color = ai.color
 		var t: float = ai.timer / ai.lifetime
-		var a: float = t * 0.6  # Fades from 0.6 to 0
+		var a: float = t * 0.6
 		var r: float = ai.radius
 		draw_circle(ai.position, r * 1.3, Color(c.r, c.g, c.b, a * 0.12))
 		draw_circle(ai.position, r, Color(c.r, c.g, c.b, a * 0.35))
@@ -155,25 +285,119 @@ func _draw() -> void:
 		draw_arc(sw.position, sw.radius, 0.0, TAU, 64, Color(sc.r, sc.g, sc.b, t * 0.5), 3.0)
 		draw_arc(sw.position, sw.radius * 0.85, 0.0, TAU, 48, Color(1.0, 1.0, 1.0, t * 0.25), 1.5)
 
+	# Draw hex pattern overlay during scale transition
+	if scale_manager and scale_manager.hex_pattern_alpha > 0.01:
+		_draw_hex_grid(cam_pos, scale_manager.hex_pattern_color, scale_manager.hex_pattern_alpha)
+
+# ── Hex grid overlay ───────────────────────────────────────────────
+
+func _draw_hex_grid(cam_pos: Vector2, color: Color, alpha: float) -> void:
+	var hex_size: float = 60.0
+	var vp: Vector2 = get_viewport_rect().size
+	var cols: int = int(vp.x / (hex_size * 1.5)) + 4
+	var rows: int = int(vp.y / (hex_size * 1.732)) + 4
+
+	var start_x: float = cam_pos.x - vp.x * 0.5 - hex_size * 2.0
+	var start_y: float = cam_pos.y - vp.y * 0.5 - hex_size * 2.0
+
+	for row in range(rows):
+		for col in range(cols):
+			var cx: float = start_x + col * hex_size * 1.5
+			var cy: float = start_y + row * hex_size * 1.732
+			if col % 2 == 1:
+				cy += hex_size * 0.866
+
+			# Distance fade from center of screen
+			var d: float = Vector2(cx, cy).distance_to(cam_pos)
+			var dist_fade: float = clampf(1.0 - d / (vp.x * 0.6), 0.0, 1.0)
+			if dist_fade < 0.01:
+				continue
+
+			var hex_alpha: float = alpha * dist_fade
+			_draw_hexagon(Vector2(cx, cy), hex_size * 0.45, Color(color.r, color.g, color.b, hex_alpha), 1.5)
+
+func _draw_hexagon(center: Vector2, size: float, color: Color, width: float) -> void:
+	var points: PackedVector2Array = PackedVector2Array()
+	for i in range(7):
+		var angle: float = PI / 3.0 * float(i) + PI / 6.0
+		points.append(center + Vector2(cos(angle), sin(angle)) * size)
+	for i in range(6):
+		draw_line(points[i], points[i + 1], color, width)
+
+# ── Shooting stars ─────────────────────────────────────────────────
+
+func _update_shooting_stars(delta: float) -> void:
+	shooting_star_timer -= delta
+	if shooting_star_timer <= 0.0:
+		_spawn_shooting_star()
+		shooting_star_timer = randf_range(SHOOTING_STAR_INTERVAL_MIN, SHOOTING_STAR_INTERVAL_MAX)
+
+	for i in range(shooting_stars.size() - 1, -1, -1):
+		var ss: Dictionary = shooting_stars[i]
+		ss.timer -= delta
+		ss.position += ss.velocity * delta
+		if ss.timer <= 0.0:
+			shooting_stars.remove_at(i)
+
+func _spawn_shooting_star() -> void:
+	var cam_pos: Vector2 = camera.global_position if camera else Vector2.ZERO
+	var vp: Vector2 = get_viewport_rect().size
+	# Start from random edge of screen
+	var start_x: float = cam_pos.x + randf_range(-vp.x * 0.6, vp.x * 0.6)
+	var start_y: float = cam_pos.y - vp.y * 0.5
+	var angle: float = randf_range(PI * 0.15, PI * 0.4) * (1.0 if randf() > 0.5 else -1.0) + PI * 0.5
+	var speed: float = randf_range(600.0, 1200.0)
+	shooting_stars.append({
+		"position": Vector2(start_x, start_y),
+		"velocity": Vector2(cos(angle), sin(angle)) * speed,
+		"size": randf_range(1.0, 2.0),
+		"trail_length": randf_range(40.0, 80.0),
+		"timer": randf_range(0.6, 1.2),
+		"lifetime": 1.2,
+	})
+
+# ── Nebula wisps ───────────────────────────────────────────────────
+
+func _generate_nebula_wisps() -> void:
+	var wisp_colors: Array[Color] = [
+		Color(0.35, 0.15, 0.55),  # Purple
+		Color(0.1, 0.2, 0.55),    # Deep blue
+		Color(0.1, 0.45, 0.45),   # Teal
+		Color(0.25, 0.1, 0.45),   # Violet
+	]
+	for i in range(4):
+		nebula_wisps.append({
+			"position": Vector2(randf_range(-STAR_FIELD_SIZE, STAR_FIELD_SIZE), randf_range(-STAR_FIELD_SIZE, STAR_FIELD_SIZE)),
+			"radius": randf_range(200.0, 450.0),
+			"color": wisp_colors[i],
+			"drift": Vector2(randf_range(-3.0, 3.0), randf_range(-3.0, 3.0)),
+			"phase": randf() * TAU,
+		})
+
+func _update_nebula_wisps(delta: float) -> void:
+	for neb in nebula_wisps:
+		neb.position += neb.drift * delta
+
 # ── Background & stars ─────────────────────────────────────────────
 
 func _update_background() -> void:
 	if background and GameData.current_scale < BG_COLORS.size():
 		var target_color: Color = BG_COLORS[GameData.current_scale]
 		background.color = background.color.lerp(target_color, 0.02)
-	queue_redraw()  # Redraw stars, afterimages, shockwaves
+	queue_redraw()
 
 func _generate_stars() -> void:
-	star_positions.clear()
-	star_sizes.clear()
-	star_brightnesses.clear()
-	for i in range(STAR_COUNT):
-		star_positions.append(Vector2(
-			randf_range(-STAR_FIELD_SIZE, STAR_FIELD_SIZE),
-			randf_range(-STAR_FIELD_SIZE, STAR_FIELD_SIZE)
-		))
-		star_sizes.append(randf_range(0.5, 2.0))
-		star_brightnesses.append(randf_range(0.3, 1.0))
+	for layer_idx in range(3):
+		star_layers[layer_idx] = []
+		var count: int = STAR_COUNTS[layer_idx]
+		for i in range(count):
+			star_layers[layer_idx].append({
+				"pos": Vector2(randf_range(-STAR_FIELD_SIZE, STAR_FIELD_SIZE), randf_range(-STAR_FIELD_SIZE, STAR_FIELD_SIZE)),
+				"size": randf_range(STAR_SIZE_MIN[layer_idx], STAR_SIZE_MAX[layer_idx]),
+				"brightness": randf_range(STAR_BRIGHTNESS_MIN[layer_idx], STAR_BRIGHTNESS_MAX[layer_idx]),
+				"phase": randf() * TAU * 10.0,
+				"twinkle_speed": randf_range(0.5, 2.5),
+			})
 
 # ── Floating text pool ─────────────────────────────────────────────
 
@@ -188,12 +412,10 @@ func _create_floating_text_pool() -> void:
 		label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.5, 1.0))
 		label.modulate.a = 0.0
 		label.z_index = 100
-		# Add to main scene (world space), not overlay
 		add_child(label)
 		floating_texts.append(label)
 
 func spawn_floating_text(world_pos: Vector2, text: String, is_big: bool) -> void:
-	# Find an available floating text
 	var label: Label = null
 	for l in floating_texts:
 		if l.modulate.a <= 0.01:
@@ -214,7 +436,6 @@ func spawn_floating_text(world_pos: Vector2, text: String, is_big: bool) -> void
 		label.add_theme_font_size_override("font_size", 18)
 		label.add_theme_color_override("font_color", Color(0.8, 1.0, 0.6, 1.0))
 
-	# Animate: float up and fade
 	var tween: Tween = create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(label, "global_position:y", world_pos.y - 60.0, 0.8).set_ease(Tween.EASE_OUT)
@@ -235,19 +456,32 @@ func screen_flash(color: Color, duration: float) -> void:
 # ── Signal handlers ────────────────────────────────────────────────
 
 func _on_player_eaten(_mass_gained: float) -> void:
-	pass  # Tiered eat effects handled directly in player.gd
+	pass
 
 func _on_transition_started(new_scale: int) -> void:
-	# Flash scale transition label — "SCALE UP!"
+	# Flash with the NEW scale's color instead of white
+	var new_color: Color = GameData.SCALE_COLORS[new_scale] if new_scale < GameData.SCALE_COLORS.size() else Color.WHITE
+
 	if scale_label_flash:
-		scale_label_flash.text = "SCALE UP!\n" + GameData.SCALE_DISPLAY[new_scale]
+		# Letter-by-letter animation for scale name
+		var full_text: String = "SCALE UP!\n" + GameData.SCALE_DISPLAY[new_scale]
+		scale_label_flash.text = ""
 		scale_label_flash.modulate.a = 1.0
-		var tween: Tween = create_tween()
-		# Hold for a moment, then fade
-		tween.tween_property(scale_label_flash, "scale", Vector2(1.2, 1.2), 0.15)
-		tween.tween_property(scale_label_flash, "scale", Vector2(1.0, 1.0), 0.1)
-		tween.tween_interval(1.2)
-		tween.tween_property(scale_label_flash, "modulate:a", 0.0, 0.5)
+		scale_label_flash.add_theme_color_override("font_color", new_color)
+
+		var letter_tween: Tween = create_tween()
+		for i in range(full_text.length()):
+			var partial: String = full_text.substr(0, i + 1)
+			letter_tween.tween_callback(func(): scale_label_flash.text = partial)
+			letter_tween.tween_interval(0.03)
+		# Hold, then fade
+		letter_tween.tween_property(scale_label_flash, "scale", Vector2(1.2, 1.2), 0.15)
+		letter_tween.tween_property(scale_label_flash, "scale", Vector2(1.0, 1.0), 0.1)
+		letter_tween.tween_interval(1.0)
+		letter_tween.tween_property(scale_label_flash, "modulate:a", 0.0, 0.5)
+
+	# Colored flash instead of white
+	screen_flash(Color(new_color.r, new_color.g, new_color.b, 0.6), 0.5)
 
 	# Screen shake
 	shake_camera(15.0, 0.7)

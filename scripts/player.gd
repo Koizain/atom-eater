@@ -327,6 +327,14 @@ func _absorb_entity(entity: Area2D, entity_radius: float) -> void:
 	_update_radius()
 	_update_visual()
 
+	# Spawn death particles at entity position
+	if get_parent() and get_parent().has_method("spawn_death_particles"):
+		var entity_data: Dictionary = {}
+		if entity.has_method("get_entity_data"):
+			entity_data = entity.get_entity_data()
+		var e_color: Color = entity_data.get("color", GameData.get_scale_color())
+		get_parent().spawn_death_particles(entity_pos, e_color, entity_radius)
+
 	# Spawn floating text at entity position
 	if get_parent() and get_parent().has_method("spawn_floating_text"):
 		var text: String = "+%.0f" % mass_gain
