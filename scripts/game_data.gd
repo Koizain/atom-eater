@@ -19,7 +19,9 @@ var color_fragments_earned: int = 0
 
 # HP system
 var player_hp: int = 3
-const MAX_HP: int = 3
+var max_hp: int = 3
+const MAX_HP_CAP: int = 5
+const START_HP: int = 3
 
 # Scale definitions — 5 scales of reality
 const SCALE_NAMES: Array[String] = ["Subatomic", "Atomic", "Molecular", "Cellular", "Planetary"]
@@ -42,14 +44,32 @@ const SCALE_COLORS: Array[Color] = [
 # Player starting radius
 const PLAYER_START_RADIUS: float = 16.0
 
+# Upgrade definitions
+const UPGRADES: Array[Dictionary] = [
+	{"id": "density", "name": "Density", "desc": "Absorption radius +30%", "max_stacks": 3},
+	{"id": "efficiency", "name": "Efficiency", "desc": "Mass per eat +20%", "max_stacks": 3},
+	{"id": "agility", "name": "Agility", "desc": "Movement speed +25%", "max_stacks": 3},
+	{"id": "magnetism", "name": "Magnetism", "desc": "Small entities drawn toward you", "max_stacks": 1},
+	{"id": "ghosting", "name": "Ghosting", "desc": "Phase through threats after dash", "max_stacks": 1},
+	{"id": "hunger", "name": "Hunger", "desc": "Eating gives brief speed burst", "max_stacks": 1},
+	{"id": "gravity", "name": "Gravity", "desc": "Right-click: shockwave pushes entities", "max_stacks": 1},
+	{"id": "chain", "name": "Chain", "desc": "Eating chains to nearest smaller entity", "max_stacks": 1},
+	{"id": "resilience", "name": "Resilience", "desc": "+1 HP (max 5)", "max_stacks": 2},
+]
+
+# Upgrade state for current run
+var upgrade_counts: Dictionary = {}
+
 func reset_run() -> void:
 	current_scale = 0
 	player_mass = 10.0
-	player_hp = MAX_HP
+	max_hp = START_HP
+	player_hp = max_hp
 	run_start_time = Time.get_ticks_msec() / 1000.0
 	objects_eaten = 0
 	max_combo = 0
 	color_fragments_earned = 0
+	upgrade_counts = {}
 
 func get_scale_name() -> String:
 	if current_scale < SCALE_NAMES.size():
@@ -102,6 +122,30 @@ func calculate_fragments() -> int:
 	frags += int(objects_eaten * 0.05)
 	frags = max(frags, 1)
 	return frags
+
+func get_upgrade_count(upgrade_id: String) -> int:
+	return upgrade_counts.get(upgrade_id, 0)
+
+func apply_upgrade(upgrade_id: String) -> void:
+	if not upgrade_counts.has(upgrade_id):
+		upgrade_counts[upgrade_id] = 0
+	upgrade_counts[upgrade_id] += 1
+	if upgrade_id == "resilience":
+		max_hp = mini(max_hp + 1, MAX_HP_CAP)
+		player_hp = mini(player_hp + 1, max_hp)
+		hp_changed.emit(player_hp)
+
+func get_random_upgrades(count: int) -> Array[Dictionary]:
+	var available: Array[Dictionary] = []
+	for upg in UPGRADES:
+		var current: int = get_upgrade_count(upg.id)
+		if current < upg.max_stacks:
+			available.append(upg)
+	available.shuffle()
+	var result: Array[Dictionary] = []
+	for i in range(mini(count, available.size())):
+		result.append(available[i])
+	return result
 
 func _ready() -> void:
 	reset_run()

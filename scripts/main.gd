@@ -63,6 +63,13 @@ const BG_COLORS: Array[Color] = [
 	Color(0.018, 0.018, 0.050),   # Planetary: deep indigo
 ]
 
+# ── Upgrade selection UI ─────────────────────────────────────────
+var upgrade_overlay: ColorRect = null
+var upgrade_cards: Array[Panel] = []
+var upgrade_container: HBoxContainer = null
+var upgrade_title_label: Label = null
+var is_upgrade_active: bool = false
+
 func _ready() -> void:
 	GameData.reset_run()
 
@@ -71,9 +78,11 @@ func _ready() -> void:
 	scale_manager.entity_spawner = entity_spawner
 	scale_manager.transition_started.connect(_on_transition_started)
 	scale_manager.transition_finished.connect(_on_transition_finished)
+	scale_manager.upgrade_selection_requested.connect(_on_upgrade_selection_requested)
 
 	# Wire player
 	player.scale_manager = scale_manager
+	player.entity_spawner = entity_spawner
 	player.eaten_entity.connect(_on_player_eaten)
 	player.player_died_signal.connect(_on_player_died)
 
@@ -100,6 +109,7 @@ func _ready() -> void:
 	_generate_stars()
 	_generate_nebula_wisps()
 	_create_floating_text_pool()
+	_build_upgrade_ui()
 	shooting_star_timer = randf_range(SHOOTING_STAR_INTERVAL_MIN, SHOOTING_STAR_INTERVAL_MAX)
 
 func _process(delta: float) -> void:
@@ -113,6 +123,184 @@ func _process(delta: float) -> void:
 	_update_death_particles(delta)
 	_update_sparkle_trails(delta)
 	_update_background()
+
+# ── Upgrade UI construction ───────────────────────────────────────
+
+func _build_upgrade_ui() -> void:
+	var ui_layer: CanvasLayer = $UIOverlay
+
+	# Dark overlay background
+	upgrade_overlay = ColorRect.new()
+	upgrade_overlay.color = Color(0.0, 0.0, 0.0, 0.7)
+	upgrade_overlay.anchors_preset = 15  # Full rect
+	upgrade_overlay.anchor_right = 1.0
+	upgrade_overlay.anchor_bottom = 1.0
+	upgrade_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	upgrade_overlay.visible = false
+	ui_layer.add_child(upgrade_overlay)
+
+	# VBox to hold title + cards
+	var vbox: VBoxContainer = VBoxContainer.new()
+	vbox.anchors_preset = 8  # Center
+	vbox.anchor_left = 0.5
+	vbox.anchor_top = 0.5
+	vbox.anchor_right = 0.5
+	vbox.anchor_bottom = 0.5
+	vbox.offset_left = -450.0
+	vbox.offset_top = -200.0
+	vbox.offset_right = 450.0
+	vbox.offset_bottom = 200.0
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 30)
+	upgrade_overlay.add_child(vbox)
+
+	# Title
+	upgrade_title_label = Label.new()
+	upgrade_title_label.text = "CHOOSE AN UPGRADE"
+	upgrade_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	upgrade_title_label.add_theme_font_size_override("font_size", 36)
+	upgrade_title_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
+	vbox.add_child(upgrade_title_label)
+
+	# Card container
+	upgrade_container = HBoxContainer.new()
+	upgrade_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	upgrade_container.add_theme_constant_override("separation", 20)
+	vbox.add_child(upgrade_container)
+
+func _show_upgrade_selection() -> void:
+	var upgrades: Array[Dictionary] = GameData.get_random_upgrades(3)
+	if upgrades.is_empty():
+		return  # No upgrades available
+
+	is_upgrade_active = true
+
+	# Clear old cards
+	for card in upgrade_cards:
+		if is_instance_valid(card):
+			card.queue_free()
+	upgrade_cards.clear()
+
+	# Update title color to current scale
+	if upgrade_title_label:
+		upgrade_title_label.add_theme_color_override("font_color", GameData.get_scale_color().lightened(0.3))
+
+	# Create cards
+	for i in range(upgrades.size()):
+		var upg: Dictionary = upgrades[i]
+		var card: Panel = _create_upgrade_card(upg, i)
+		upgrade_container.add_child(card)
+		upgrade_cards.append(card)
+
+	upgrade_overlay.visible = true
+	upgrade_overlay.modulate.a = 0.0
+
+	# Animate in
+	var tween: Tween = create_tween()
+	tween.tween_property(upgrade_overlay, "modulate:a", 1.0, 0.3).set_ease(Tween.EASE_OUT)
+
+	# Pause the game tree (but keep UI responding)
+	get_tree().paused = true
+	upgrade_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
+
+func _create_upgrade_card(upg: Dictionary, index: int) -> Panel:
+	var card: Panel = Panel.new()
+	card.custom_minimum_size = Vector2(250, 160)
+	card.process_mode = Node.PROCESS_MODE_ALWAYS
+
+	# Card background style
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	var sc: Color = GameData.get_scale_color()
+	style.bg_color = Color(sc.r * 0.15, sc.g * 0.15, sc.b * 0.15, 0.9)
+	style.border_color = Color(sc.r * 0.5, sc.g * 0.5, sc.b * 0.5, 0.8)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
+	style.set_content_margin_all(16)
+	card.add_theme_stylebox_override("panel", style)
+
+	# Inner VBox
+	var inner: VBoxContainer = VBoxContainer.new()
+	inner.anchors_preset = 15
+	inner.anchor_right = 1.0
+	inner.anchor_bottom = 1.0
+	inner.offset_left = 16.0
+	inner.offset_top = 16.0
+	inner.offset_right = -16.0
+	inner.offset_bottom = -16.0
+	inner.add_theme_constant_override("separation", 8)
+	card.add_child(inner)
+
+	# Name label
+	var name_label: Label = Label.new()
+	name_label.text = upg.name.to_upper()
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.add_theme_font_size_override("font_size", 22)
+	name_label.add_theme_color_override("font_color", sc.lightened(0.4))
+	inner.add_child(name_label)
+
+	# Description label
+	var desc_label: Label = Label.new()
+	desc_label.text = upg.desc
+	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc_label.add_theme_font_size_override("font_size", 14)
+	desc_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 0.9))
+	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	inner.add_child(desc_label)
+
+	# Stack count
+	var current_stacks: int = GameData.get_upgrade_count(upg.id)
+	if upg.max_stacks > 1:
+		var stack_label: Label = Label.new()
+		stack_label.text = "[%d / %d]" % [current_stacks, upg.max_stacks]
+		stack_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		stack_label.add_theme_font_size_override("font_size", 12)
+		stack_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.7))
+		inner.add_child(stack_label)
+
+	# Select button
+	var btn: Button = Button.new()
+	btn.text = "SELECT"
+	btn.process_mode = Node.PROCESS_MODE_ALWAYS
+	var btn_style: StyleBoxFlat = StyleBoxFlat.new()
+	btn_style.bg_color = Color(sc.r * 0.3, sc.g * 0.3, sc.b * 0.3, 0.9)
+	btn_style.set_corner_radius_all(4)
+	btn_style.set_content_margin_all(8)
+	btn.add_theme_stylebox_override("normal", btn_style)
+	var btn_hover: StyleBoxFlat = btn_style.duplicate()
+	btn_hover.bg_color = Color(sc.r * 0.5, sc.g * 0.5, sc.b * 0.5, 0.95)
+	btn.add_theme_stylebox_override("hover", btn_hover)
+	btn.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.9))
+	btn.add_theme_font_size_override("font_size", 16)
+	btn.pressed.connect(_on_upgrade_selected.bind(upg.id))
+	inner.add_child(btn)
+
+	return card
+
+func _on_upgrade_selected(upgrade_id: String) -> void:
+	if not is_upgrade_active:
+		return
+	is_upgrade_active = false
+
+	# Apply upgrade to player
+	player.apply_upgrade(upgrade_id)
+
+	# Animate out
+	var tween: Tween = create_tween()
+	tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
+	tween.tween_property(upgrade_overlay, "modulate:a", 0.0, 0.2).set_ease(Tween.EASE_IN)
+	tween.tween_callback(_hide_upgrade_ui)
+
+func _hide_upgrade_ui() -> void:
+	upgrade_overlay.visible = false
+	get_tree().paused = false
+
+	# Flash to confirm selection
+	screen_flash(GameData.get_scale_color() * Color(1, 1, 1, 0.3), 0.2)
+
+func _on_upgrade_selection_requested() -> void:
+	# Short delay before showing upgrades
+	await get_tree().create_timer(0.5).timeout
+	_show_upgrade_selection()
 
 # ── Afterimage system ──────────────────────────────────────────────
 

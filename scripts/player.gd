@@ -47,13 +47,37 @@ const TRAIL_MAX_POINTS: int = 20
 const TRAIL_POINT_INTERVAL: float = 0.03
 var trail_timer: float = 0.0
 
-# Upgrades
+# Core upgrades (stackable)
 var absorption_radius_bonus: float = 0.0
 var mass_efficiency_bonus: float = 0.0
 var dash_cooldown_reduction: float = 0.0
+var speed_bonus: float = 0.0
+
+# Toggle upgrades
+var has_magnetism: bool = false
+var has_ghosting: bool = false
+var has_hunger: bool = false
+var has_gravity: bool = false
+var has_chain: bool = false
+
+# Hunger speed burst
+var hunger_burst_timer: float = 0.0
+const HUNGER_BURST_DURATION: float = 0.6
+const HUNGER_BURST_MULT: float = 1.5
+
+# Ghosting: extended invincibility after dash
+var ghosting_timer: float = 0.0
+const GHOSTING_DURATION: float = 0.5
+
+# Gravity ability
+var gravity_cooldown_timer: float = 0.0
+const GRAVITY_COOLDOWN: float = 5.0
 
 # Scale manager reference
 var scale_manager: Node = null
+
+# Entity spawner reference (for chain eating and splitter spawns)
+var entity_spawner: Node = null
 
 # Viewport size for screen wrapping
 var viewport_size: Vector2 = Vector2(1920, 1080)
@@ -87,6 +111,10 @@ func _process(delta: float) -> void:
 	_handle_trail(delta)
 	_handle_hit_invincibility(delta)
 	_handle_afterimages(delta)
+	_handle_ghosting(delta)
+	_handle_hunger_burst(delta)
+	_handle_magnetism(delta)
+	_handle_gravity_cooldown(delta)
 	_check_scale_transition()
 
 func _handle_movement(delta: float) -> void:
@@ -100,13 +128,20 @@ func _handle_movement(delta: float) -> void:
 	# Speed scales inversely with size
 	var size_factor: float = GameData.PLAYER_START_RADIUS / max(player_radius, 1.0)
 	var speed_mult: float = clamp(lerp(1.0, MIN_SPEED_FACTOR, 1.0 - size_factor), MIN_SPEED_FACTOR, 1.0)
-	var current_speed: float = BASE_SPEED * speed_mult
+	var current_speed: float = BASE_SPEED * speed_mult * (1.0 + speed_bonus)
+
+	# Hunger burst
+	if hunger_burst_timer > 0.0:
+		current_speed *= HUNGER_BURST_MULT
 
 	if is_dashing:
 		dash_timer -= delta
 		if dash_timer <= 0.0:
 			is_dashing = false
 			_trail_target_width = 4.0
+			# Ghosting: extend invincibility after dash ends
+			if has_ghosting:
+				ghosting_timer = GHOSTING_DURATION
 		else:
 			velocity = dash_direction * DASH_SPEED * speed_mult
 	else:
@@ -206,6 +241,41 @@ func _handle_afterimages(delta: float) -> void:
 			_afterimage_timer = AFTERIMAGE_INTERVAL
 			_spawn_afterimage()
 
+func _handle_ghosting(delta: float) -> void:
+	if ghosting_timer > 0.0:
+		ghosting_timer -= delta
+		# Visual feedback: slight transparency
+		if circle_draw:
+			circle_draw.modulate.a = 0.5 + 0.3 * sin(ghosting_timer * 15.0)
+
+func _handle_hunger_burst(delta: float) -> void:
+	if hunger_burst_timer > 0.0:
+		hunger_burst_timer -= delta
+
+func _handle_magnetism(delta: float) -> void:
+	if not has_magnetism:
+		return
+	if not entity_spawner or not is_instance_valid(entity_spawner):
+		return
+
+	var pull_range: float = player_radius * 4.0
+	for entity in entity_spawner.active_entities:
+		if not is_instance_valid(entity) or not entity.visible:
+			continue
+		var e_radius: float = entity.entity_radius if "entity_radius" in entity else 10.0
+		# Only attract entities smaller than us
+		if e_radius >= player_radius * 0.8:
+			continue
+		var offset: Vector2 = global_position - entity.global_position
+		var dist: float = offset.length()
+		if dist < pull_range and dist > player_radius:
+			var strength: float = (1.0 - dist / pull_range) * 40.0
+			entity.global_position += offset.normalized() * strength * get_process_delta_time()
+
+func _handle_gravity_cooldown(delta: float) -> void:
+	if gravity_cooldown_timer > 0.0:
+		gravity_cooldown_timer -= delta
+
 func _spawn_afterimage() -> void:
 	if get_parent() and get_parent().has_method("add_afterimage"):
 		var color: Color = GameData.get_scale_color()
@@ -216,8 +286,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton:
 		var mouse_event: InputEventMouseButton = event as InputEventMouseButton
-		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_LEFT:
-			_try_dash()
+		if mouse_event.pressed:
+			if mouse_event.button_index == MOUSE_BUTTON_LEFT:
+				_try_dash()
+			elif mouse_event.button_index == MOUSE_BUTTON_RIGHT:
+				_try_gravity_push()
 
 func _try_dash() -> void:
 	if dash_cooldown_timer > 0.0 or is_dashing or _dash_freeze:
@@ -251,6 +324,33 @@ func _launch_dash() -> void:
 	# Dash screen shake
 	_shake(8.0, 0.15)
 
+func _try_gravity_push() -> void:
+	if not has_gravity:
+		return
+	if gravity_cooldown_timer > 0.0:
+		return
+
+	gravity_cooldown_timer = GRAVITY_COOLDOWN
+
+	# Push all entities away
+	if entity_spawner and is_instance_valid(entity_spawner):
+		var push_radius: float = player_radius * 8.0
+		for entity in entity_spawner.active_entities:
+			if not is_instance_valid(entity) or not entity.visible:
+				continue
+			var offset: Vector2 = entity.global_position - global_position
+			var dist: float = offset.length()
+			if dist < push_radius and dist > 0.0:
+				var push_force: float = (1.0 - dist / push_radius) * 400.0
+				entity.global_position += offset.normalized() * push_force
+
+	# Visual: shockwave
+	if get_parent() and get_parent().has_method("spawn_shockwave"):
+		get_parent().spawn_shockwave(global_position)
+	_shake(12.0, 0.3)
+	if get_parent() and get_parent().has_method("screen_flash"):
+		get_parent().screen_flash(GameData.get_scale_color() * Color(1, 1, 1, 0.3), 0.2)
+
 func _on_area_entered(area: Area2D) -> void:
 	if is_dead:
 		return
@@ -265,6 +365,10 @@ func _on_area_entered(area: Area2D) -> void:
 	if scale_manager and scale_manager.is_player_invincible():
 		return
 
+	# Ghosting: invincible to larger entities after dash
+	if ghosting_timer > 0.0 and entity_radius > player_radius * 1.1:
+		return
+
 	if is_toxic:
 		_take_toxic_damage(entity_radius * 0.3)
 		_return_entity_to_pool(area)
@@ -272,11 +376,11 @@ func _on_area_entered(area: Area2D) -> void:
 
 	# Size comparison — eat if < 110% our size, danger if > 110%
 	if entity_radius < player_radius * 1.1:
-		_absorb_entity(area, entity_radius)
+		_absorb_entity(area, entity_radius, entity_data)
 	elif entity_radius > player_radius * 1.1:
 		_take_damage()
 
-func _absorb_entity(entity: Area2D, entity_radius: float) -> void:
+func _absorb_entity(entity: Area2D, entity_radius: float, entity_data: Dictionary) -> void:
 	var mass_gain: float = entity_radius * entity_radius * PI * 0.02
 	mass_gain *= (1.0 + mass_efficiency_bonus)
 
@@ -329,9 +433,6 @@ func _absorb_entity(entity: Area2D, entity_radius: float) -> void:
 
 	# Spawn death particles at entity position
 	if get_parent() and get_parent().has_method("spawn_death_particles"):
-		var entity_data: Dictionary = {}
-		if entity.has_method("get_entity_data"):
-			entity_data = entity.get_entity_data()
 		var e_color: Color = entity_data.get("color", GameData.get_scale_color())
 		get_parent().spawn_death_particles(entity_pos, e_color, entity_radius)
 
@@ -342,7 +443,93 @@ func _absorb_entity(entity: Area2D, entity_radius: float) -> void:
 			text = "+%.0f x%.1f" % [mass_gain, multiplier]
 		get_parent().spawn_floating_text(entity_pos, text, size_ratio > 0.7)
 
+	# Handle splitter: spawn split children
+	var etype: int = entity_data.get("entity_type", 0)
+	var generation: int = entity_data.get("generation", 0)
+	if etype == 4 and entity_spawner and entity_spawner.has_method("spawn_split_children"):
+		# EntityType.SPLITTER == 4
+		var e_color: Color = entity_data.get("color", Color(0.2, 0.9, 0.9))
+		entity_spawner.spawn_split_children(entity_pos, entity_radius, generation, e_color)
+
 	_return_entity_to_pool(entity)
+
+	# Hunger: speed burst on eat
+	if has_hunger:
+		hunger_burst_timer = HUNGER_BURST_DURATION
+
+	# Chain eating: auto-eat nearest smaller entity
+	if has_chain and entity_spawner and is_instance_valid(entity_spawner):
+		_try_chain_eat()
+
+func _try_chain_eat() -> void:
+	var chain_range: float = player_radius * 3.0
+	var nearest_entity: Area2D = null
+	var nearest_dist: float = chain_range
+
+	for entity in entity_spawner.active_entities:
+		if not is_instance_valid(entity) or not entity.visible:
+			continue
+		var e_radius: float = entity.entity_radius if "entity_radius" in entity else 10.0
+		if e_radius >= player_radius * 0.9:
+			continue  # Only chain to smaller entities
+		var e_toxic: bool = entity.is_toxic if "is_toxic" in entity else false
+		if e_toxic:
+			continue
+
+		var dist: float = entity.global_position.distance_to(global_position)
+		if dist < nearest_dist:
+			nearest_dist = dist
+			nearest_entity = entity
+
+	if nearest_entity and is_instance_valid(nearest_entity):
+		# Chain eat with slight delay effect
+		var chain_data: Dictionary = nearest_entity.get_entity_data() if nearest_entity.has_method("get_entity_data") else {}
+		var chain_radius: float = chain_data.get("radius", 10.0)
+		_absorb_chain_target(nearest_entity, chain_radius, chain_data)
+
+func _absorb_chain_target(entity: Area2D, entity_radius: float, entity_data: Dictionary) -> void:
+	# Simplified absorb without chain recursion
+	var mass_gain: float = entity_radius * entity_radius * PI * 0.02
+	mass_gain *= (1.0 + mass_efficiency_bonus)
+
+	combo_count += 1
+	combo_timer = COMBO_WINDOW
+	if combo_count > GameData.max_combo:
+		GameData.max_combo = combo_count
+
+	var multiplier: float = GameData.get_combo_multiplier(combo_count)
+	mass_gain *= multiplier
+	combo_changed.emit(combo_count, multiplier)
+
+	GameData.player_mass += mass_gain
+	GameData.objects_eaten += 1
+
+	var entity_pos: Vector2 = entity.global_position
+
+	# Small eat effects for chain
+	var cam: Camera2D = get_viewport().get_camera_2d()
+	if cam and cam.has_method("zoom_punch"):
+		cam.zoom_punch(0.01)
+
+	eaten_entity.emit(mass_gain)
+
+	if get_parent() and get_parent().has_method("spawn_death_particles"):
+		var e_color: Color = entity_data.get("color", GameData.get_scale_color())
+		get_parent().spawn_death_particles(entity_pos, e_color, entity_radius)
+
+	if get_parent() and get_parent().has_method("spawn_floating_text"):
+		get_parent().spawn_floating_text(entity_pos, "+%.0f" % mass_gain, false)
+
+	# Handle splitter chain targets
+	var etype: int = entity_data.get("entity_type", 0)
+	var generation: int = entity_data.get("generation", 0)
+	if etype == 4 and entity_spawner and entity_spawner.has_method("spawn_split_children"):
+		var e_color: Color = entity_data.get("color", Color(0.2, 0.9, 0.9))
+		entity_spawner.spawn_split_children(entity_pos, entity_radius, generation, e_color)
+
+	_return_entity_to_pool(entity)
+	_update_radius()
+	_update_visual()
 
 func _freeze_frame(real_duration: float) -> void:
 	if Engine.time_scale < 0.5:
@@ -433,14 +620,27 @@ func _update_visual() -> void:
 func get_player_radius() -> float:
 	return player_radius
 
-func apply_upgrade(upgrade_type: String) -> void:
-	match upgrade_type:
-		"absorption_radius":
+func apply_upgrade(upgrade_id: String) -> void:
+	GameData.apply_upgrade(upgrade_id)
+	match upgrade_id:
+		"density":
 			absorption_radius_bonus += 0.3
-		"mass_efficiency":
+		"efficiency":
 			mass_efficiency_bonus += 0.2
-		"dash_cooldown":
-			dash_cooldown_reduction += 0.35
+		"agility":
+			speed_bonus += 0.25
+		"magnetism":
+			has_magnetism = true
+		"ghosting":
+			has_ghosting = true
+		"hunger":
+			has_hunger = true
+		"gravity":
+			has_gravity = true
+		"chain":
+			has_chain = true
+		"resilience":
+			pass  # Handled by GameData.apply_upgrade
 
 func _return_entity_to_pool(entity: Area2D) -> void:
 	entity.hide()

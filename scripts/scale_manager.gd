@@ -2,6 +2,7 @@ extends Node
 
 signal transition_started(new_scale: int)
 signal transition_finished(new_scale: int)
+signal upgrade_selection_requested()
 
 @export var camera: Camera2D
 @export var entity_spawner: Node
@@ -87,6 +88,7 @@ func _do_dramatic_transition(new_scale: int) -> void:
 
 func _apply_scale_change(new_scale: int) -> void:
 	GameData.current_scale = new_scale
+	# Mass resets — player is tiny again in new scale
 	GameData.player_mass = GameData.SCALE_THRESHOLDS[new_scale - 1] * 0.15
 	if entity_spawner and entity_spawner.has_method("refresh_for_scale"):
 		entity_spawner.refresh_for_scale(new_scale)
@@ -96,3 +98,5 @@ func _finish_transition(new_scale: int) -> void:
 	invincibility_timer = INVINCIBILITY_DURATION
 	is_transitioning = false
 	transition_finished.emit(new_scale)
+	# Request upgrade selection
+	upgrade_selection_requested.emit()

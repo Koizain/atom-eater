@@ -105,21 +105,26 @@ func _on_player_hit() -> void:
 func _create_hp_circles() -> void:
 	if not hp_container:
 		return
-	for i in range(GameData.MAX_HP):
+	for i in range(GameData.MAX_HP_CAP):
 		var circle: ColorRect = ColorRect.new()
 		circle.custom_minimum_size = Vector2(18, 18)
-		circle.color = Color(1.0, 0.2, 0.2, 0.9)
+		if i < GameData.max_hp:
+			circle.color = Color(1.0, 0.2, 0.2, 0.9) if i < GameData.player_hp else Color(0.3, 0.1, 0.1, 0.4)
+		else:
+			circle.color = Color(0.0, 0.0, 0.0, 0.0)  # Hidden slot
 		hp_container.add_child(circle)
 		hp_circles.append(circle)
 
 func _update_hp_display() -> void:
 	for i in range(hp_circles.size()):
-		if i < GameData.player_hp:
+		if i >= GameData.max_hp:
+			hp_circles[i].color = Color(0.0, 0.0, 0.0, 0.0)  # Hidden
+		elif i < GameData.player_hp:
 			hp_circles[i].color = Color(1.0, 0.2, 0.2, 0.9)
 		else:
 			hp_circles[i].color = Color(0.3, 0.1, 0.1, 0.4)
 	# Pulse remaining HP circles
-	if GameData.player_hp > 0 and GameData.player_hp < GameData.MAX_HP:
+	if GameData.player_hp > 0 and GameData.player_hp < GameData.max_hp:
 		for i in range(GameData.player_hp):
 			var tween: Tween = create_tween()
 			tween.tween_property(hp_circles[i], "scale", Vector2(1.4, 1.4), 0.1)
