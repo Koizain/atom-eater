@@ -2,7 +2,7 @@ extends CanvasLayer
 
 @onready var scale_label: Label = $VBoxContainer/ScaleLabel
 @onready var progress_bar: ProgressBar = $VBoxContainer/ProgressBar
-@onready var mass_label: Label = $VBoxContainer/MassLabel
+var mass_label: Label = null
 @onready var hp_container: HBoxContainer = $VBoxContainer/HPContainer
 @onready var fps_label: Label = $VBoxContainer/FPSLabel
 @onready var combo_label: Label = $ComboDisplay/ComboLabel
@@ -18,6 +18,7 @@ var progress_glow_time: float = 0.0
 var display_progress: float = 0.0
 
 func _ready() -> void:
+	mass_label = get_node_or_null("VBoxContainer/MassLabel")
 	GameData.scale_changed.connect(_on_scale_changed)
 	GameData.hp_changed.connect(_on_hp_changed)
 	if scale_flash:
