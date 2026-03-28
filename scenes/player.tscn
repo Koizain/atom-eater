@@ -19,3 +19,10 @@ shape = SubResource("CircleShape2D_1")
 
 [node name="CircleDraw" type="Node2D" parent="."]
 script = ExtResource("2_draw")
+
+[node name="TrailLine" type="Line2D" parent="."]
+width = 4.0
+default_color = Color(0.3, 0.5, 1.0, 0.4)
+begin_cap_mode = 1
+end_cap_mode = 1
+antialiased = true

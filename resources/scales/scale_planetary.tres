@@ -1,0 +1,15 @@
+[gd_resource type="Resource" format=3 uid="uid://scale_plan001"]
+
+[resource]
+script_class = ""
+scale_name = "Planetary"
+scale_index = 4
+mass_threshold = 9999999.0
+spawn_density = 1.6
+object_speed_min = 35.0
+object_speed_max = 90.0
+object_size_ratio_min = 0.08
+object_size_ratio_max = 4.0
+toxic_chance = 0.30
+background_color = Color(0.02, 0.02, 0.05, 1.0)
+accent_color = Color(0.7, 0.4, 1.0, 1.0)

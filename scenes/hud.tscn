@@ -23,42 +23,63 @@ mouse_filter = 2
 [node name="VBoxContainer" type="VBoxContainer" parent="."]
 offset_left = 20.0
 offset_top = 20.0
-offset_right = 320.0
-offset_bottom = 180.0
-theme_override_constants/separation = 8
+offset_right = 360.0
+offset_bottom = 220.0
+theme_override_constants/separation = 6
 
 [node name="ScaleLabel" type="Label" parent="VBoxContainer"]
-text = "⚛ Subatomic"
-theme_override_font_sizes/font_size = 28
+text = "SCALE 1: SUBATOMIC"
+theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(0.3, 0.5, 1.0, 1.0)
 theme_override_colors/font_shadow_color = Color(0.1, 0.2, 0.8, 0.6)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
 
 [node name="ProgressBar" type="ProgressBar" parent="VBoxContainer"]
-custom_minimum_size = Vector2(280.0, 14.0)
+custom_minimum_size = Vector2(320.0, 16.0)
 value = 0.0
 max_value = 100.0
 show_percentage = false
 add_theme_stylebox_override("background", SubResource("StyleBoxFlat_progress_bg"))
 
-[node name="ProgressLabel" type="Label" parent="VBoxContainer"]
-text = "Progress to next scale"
-theme_override_font_sizes/font_size = 13
-theme_override_colors/font_color = Color(0.7, 0.7, 0.8, 0.7)
+[node name="MassLabel" type="Label" parent="VBoxContainer"]
+text = "Mass: 10 / 350"
+theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(0.7, 0.8, 0.9, 0.85)
 
-[node name="DeathsLabel" type="Label" parent="VBoxContainer"]
-text = "☠ Deaths: 0"
-theme_override_font_sizes/font_size = 17
-theme_override_colors/font_color = Color(0.9, 0.3, 0.3, 1.0)
+[node name="HPContainer" type="HBoxContainer" parent="VBoxContainer"]
+theme_override_constants/separation = 6
+
+[node name="HPLabel" type="Label" parent="VBoxContainer/HPContainer"]
+text = "HP:"
+theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(1.0, 0.3, 0.3, 0.9)
 
 [node name="FPSLabel" type="Label" parent="VBoxContainer"]
 text = "FPS: 60"
-theme_override_font_sizes/font_size = 13
-theme_override_colors/font_color = Color(0.5, 0.5, 0.6, 0.7)
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.4, 0.4, 0.5, 0.6)
 
-[node name="ComboLabel" type="Label" parent="VBoxContainer"]
+[node name="ComboDisplay" type="VBoxContainer" parent="."]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+anchor_top = 0.08
+offset_left = -100.0
+offset_right = 100.0
+offset_bottom = 80.0
+theme_override_constants/separation = 2
+
+[node name="ComboLabel" type="Label" parent="ComboDisplay"]
 text = ""
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 28
 theme_override_colors/font_color = Color(1.0, 0.9, 0.1, 1.0)
+horizontal_alignment = 1
+modulate = Color(1.0, 1.0, 1.0, 0.0)
+
+[node name="MultiplierLabel" type="Label" parent="ComboDisplay"]
+text = ""
+theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(1.0, 0.6, 0.1, 1.0)
+horizontal_alignment = 1
 modulate = Color(1.0, 1.0, 1.0, 0.0)

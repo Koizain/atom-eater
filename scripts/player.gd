@@ -2,17 +2,21 @@ extends Area2D
 
 signal eaten_entity(mass_gained: float)
 signal player_died_signal()
+signal combo_changed(combo: int, multiplier: float)
+signal player_hit()
 
 # Visual node references
 @onready var circle_draw: Node2D = $CircleDraw
 @onready var collision_shape: CollisionShape2D = $CollisionShape2D
+@onready var trail_line: Line2D = $TrailLine
 
 # Movement settings
-const BASE_SPEED: float = 220.0
-const DRIFT_FORCE: float = 6.5
+const BASE_SPEED: float = 280.0
+const DRIFT_FORCE: float = 5.0
 const DASH_SPEED: float = 850.0
 const DASH_DURATION: float = 0.18
 const DASH_COOLDOWN: float = 0.8
+const MIN_SPEED_FACTOR: float = 0.35  # Minimum speed multiplier at max size
 
 # State
 var velocity: Vector2 = Vector2.ZERO
@@ -26,7 +30,16 @@ var is_dead: bool = false
 var player_radius: float = GameData.PLAYER_START_RADIUS
 var combo_count: int = 0
 var combo_timer: float = 0.0
-const COMBO_WINDOW: float = 1.5
+const COMBO_WINDOW: float = 1.8
+
+# Eat pop effect
+var eat_pop_timer: float = 0.0
+var eat_pop_scale: float = 1.0
+
+# Trail
+const TRAIL_MAX_POINTS: int = 20
+const TRAIL_POINT_INTERVAL: float = 0.03
+var trail_timer: float = 0.0
 
 # Upgrades
 var absorption_radius_bonus: float = 0.0
@@ -36,10 +49,26 @@ var dash_cooldown_reduction: float = 0.0
 # Scale manager reference
 var scale_manager: Node = null
 
+# Viewport size for screen wrapping
+var viewport_size: Vector2 = Vector2(1920, 1080)
+
+# Hit invincibility
+var hit_invincible_timer: float = 0.0
+const HIT_INVINCIBLE_DURATION: float = 1.0
+
 func _ready() -> void:
 	area_entered.connect(_on_area_entered)
 	_update_radius()
 	_update_visual()
+	viewport_size = get_viewport_rect().size
+
+	# Setup trail
+	if trail_line:
+		trail_line.width = 4.0
+		trail_line.default_color = GameData.get_scale_color()
+		trail_line.gradient = Gradient.new()
+		trail_line.gradient.set_color(0, Color(1, 1, 1, 0.5))
+		trail_line.gradient.set_color(1, Color(1, 1, 1, 0.0))
 
 func _process(delta: float) -> void:
 	if is_dead:
@@ -48,28 +77,56 @@ func _process(delta: float) -> void:
 	_handle_movement(delta)
 	_handle_dash_cooldown(delta)
 	_handle_combo_timer(delta)
+	_handle_eat_pop(delta)
+	_handle_trail(delta)
+	_handle_hit_invincibility(delta)
 	_check_scale_transition()
+
+	# Rotation based on movement direction
+	if velocity.length() > 10.0:
+		var target_rot: float = velocity.angle()
+		rotation = lerp_angle(rotation, target_rot, 3.0 * delta)
 
 func _handle_movement(delta: float) -> void:
 	var mouse_pos: Vector2 = get_global_mouse_position()
 	var direction: Vector2 = (mouse_pos - global_position)
 	var dist: float = direction.length()
 
+	# Speed scales inversely with size
+	var size_factor: float = GameData.PLAYER_START_RADIUS / max(player_radius, 1.0)
+	var speed_mult: float = clamp(lerp(1.0, MIN_SPEED_FACTOR, 1.0 - size_factor), MIN_SPEED_FACTOR, 1.0)
+	var current_speed: float = BASE_SPEED * speed_mult
+
 	if is_dashing:
 		dash_timer -= delta
 		if dash_timer <= 0.0:
 			is_dashing = false
 		else:
-			velocity = dash_direction * DASH_SPEED
+			velocity = dash_direction * DASH_SPEED * speed_mult
 	else:
 		if dist > 5.0:
-			var target_vel: Vector2 = direction.normalized() * BASE_SPEED
-			# Drift: smoothly interpolate toward target velocity
+			var target_vel: Vector2 = direction.normalized() * current_speed
+			# Smooth drift with momentum/inertia
 			velocity = velocity.lerp(target_vel, DRIFT_FORCE * delta)
 		else:
-			velocity = velocity.lerp(Vector2.ZERO, 8.0 * delta)
+			velocity = velocity.lerp(Vector2.ZERO, 4.0 * delta)
 
 	global_position += velocity * delta
+
+	# Screen wrap (toroidal space) — relative to camera
+	var cam: Camera2D = get_viewport().get_camera_2d()
+	if cam:
+		var cam_pos: Vector2 = cam.global_position
+		var half_w: float = viewport_size.x * 0.6
+		var half_h: float = viewport_size.y * 0.6
+		if global_position.x > cam_pos.x + half_w:
+			global_position.x -= half_w * 2.0
+		elif global_position.x < cam_pos.x - half_w:
+			global_position.x += half_w * 2.0
+		if global_position.y > cam_pos.y + half_h:
+			global_position.y -= half_h * 2.0
+		elif global_position.y < cam_pos.y - half_h:
+			global_position.y += half_h * 2.0
 
 func _handle_dash_cooldown(delta: float) -> void:
 	if dash_cooldown_timer > 0.0:
@@ -80,6 +137,50 @@ func _handle_combo_timer(delta: float) -> void:
 		combo_timer -= delta
 		if combo_timer <= 0.0:
 			combo_count = 0
+			combo_changed.emit(0, 1.0)
+
+func _handle_eat_pop(delta: float) -> void:
+	if eat_pop_timer > 0.0:
+		eat_pop_timer -= delta
+		# Quick scale up then back down
+		var t: float = eat_pop_timer / 0.15
+		eat_pop_scale = 1.0 + 0.15 * sin(t * PI)
+		if circle_draw:
+			circle_draw.scale = Vector2(eat_pop_scale, eat_pop_scale)
+	elif eat_pop_scale != 1.0:
+		eat_pop_scale = 1.0
+		if circle_draw:
+			circle_draw.scale = Vector2.ONE
+
+func _handle_trail(delta: float) -> void:
+	if not trail_line:
+		return
+	trail_timer -= delta
+	if trail_timer <= 0.0 and velocity.length() > 20.0:
+		trail_timer = TRAIL_POINT_INTERVAL
+		# Trail points are in local space relative to parent, but we want world positions
+		# Since trail_line is a child, we use relative positions
+		trail_line.add_point(Vector2.ZERO)
+		if trail_line.get_point_count() > TRAIL_MAX_POINTS:
+			trail_line.remove_point(0)
+
+	# Move existing points away (they stay in world space effect)
+	for i in range(trail_line.get_point_count()):
+		var pt: Vector2 = trail_line.get_point_position(i)
+		pt -= velocity * delta  # Counter-move to stay in world space
+		trail_line.set_point_position(i, pt)
+
+	# Update trail color
+	trail_line.default_color = GameData.get_scale_color()
+
+func _handle_hit_invincibility(delta: float) -> void:
+	if hit_invincible_timer > 0.0:
+		hit_invincible_timer -= delta
+		# Flash effect
+		if circle_draw:
+			circle_draw.modulate.a = 0.4 + 0.6 * abs(sin(hit_invincible_timer * 12.0))
+	elif circle_draw and circle_draw.modulate.a != 1.0:
+		circle_draw.modulate.a = 1.0
 
 func _unhandled_input(event: InputEvent) -> void:
 	if is_dead:
@@ -116,25 +217,19 @@ func _on_area_entered(area: Area2D) -> void:
 		return
 
 	if is_toxic:
-		# Toxic: lose mass on contact
 		_take_toxic_damage(entity_radius * 0.3)
 		_return_entity_to_pool(area)
 		return
 
-	# Size comparison — GDD: eat if < 110% our size, danger if > 110% our size
-	# Neutral zone: exactly 1.1x (bounce off — handled by physics naturally)
+	# Size comparison — eat if < 110% our size, danger if > 110%
 	if entity_radius < player_radius * 1.1:
-		# We can eat it
 		_absorb_entity(area, entity_radius)
 	elif entity_radius > player_radius * 1.1:
-		# It can eat us — danger!
 		_take_damage()
 
 func _absorb_entity(entity: Area2D, entity_radius: float) -> void:
 	var mass_gain: float = entity_radius * entity_radius * PI * 0.02
 	mass_gain *= (1.0 + mass_efficiency_bonus)
-	GameData.player_mass += mass_gain
-	GameData.objects_eaten += 1
 
 	# Combo
 	combo_count += 1
@@ -142,24 +237,66 @@ func _absorb_entity(entity: Area2D, entity_radius: float) -> void:
 	if combo_count > GameData.max_combo:
 		GameData.max_combo = combo_count
 
+	# Combo multiplier
+	var multiplier: float = GameData.get_combo_multiplier(combo_count)
+	mass_gain *= multiplier
+	combo_changed.emit(combo_count, multiplier)
+
+	GameData.player_mass += mass_gain
+	GameData.objects_eaten += 1
+
+	# Eat pop effect
+	eat_pop_timer = 0.15
+
+	# Check if it was a big eat (>0.7x player size)
+	var size_ratio: float = entity_radius / player_radius
+	var is_big_eat: bool = size_ratio > 0.7
+
 	eaten_entity.emit(mass_gain)
 	_update_radius()
 	_update_visual()
 
-	# Return entity to pool (don't free it!)
+	# Spawn floating text at entity position
+	if get_parent() and get_parent().has_method("spawn_floating_text"):
+		var text: String = "+%.0f" % mass_gain
+		if multiplier > 1.0:
+			text = "+%.0f x%.1f" % [mass_gain, multiplier]
+		get_parent().spawn_floating_text(entity.global_position, text, is_big_eat)
+
+	# Big eat screen pulse
+	if is_big_eat:
+		_screen_pulse()
+
 	_return_entity_to_pool(entity)
 
+func _screen_pulse() -> void:
+	# Tell main to do a screen flash
+	if get_parent() and get_parent().has_method("screen_flash"):
+		get_parent().screen_flash(Color(1, 1, 1, 0.3), 0.2)
+
 func _take_damage() -> void:
-	# Shrink player significantly (eaten partially)
-	GameData.player_mass *= 0.6
-	if GameData.player_mass < 1.0:
+	if hit_invincible_timer > 0.0:
+		return
+
+	var is_dead_now: bool = GameData.take_damage()
+	hit_invincible_timer = HIT_INVINCIBLE_DURATION
+	player_hit.emit()
+
+	if is_dead_now:
 		_die()
 	else:
+		# Shrink a bit
+		GameData.player_mass *= 0.8
 		_update_radius()
 		_update_visual()
-		_shake(8.0, 0.3)
+		_shake(10.0, 0.4)
+		# Screen red flash
+		if get_parent() and get_parent().has_method("screen_flash"):
+			get_parent().screen_flash(Color(1, 0, 0, 0.4), 0.3)
 
 func _take_toxic_damage(amount: float) -> void:
+	if hit_invincible_timer > 0.0:
+		return
 	GameData.player_mass -= amount
 	if GameData.player_mass < 1.0:
 		_die()
@@ -178,10 +315,21 @@ func _die() -> void:
 		return
 	is_dead = true
 	GameData.deaths_this_session += 1
+
+	# Death implosion animation
+	if circle_draw:
+		var tween: Tween = create_tween()
+		tween.tween_property(circle_draw, "scale", Vector2(1.5, 1.5), 0.1)
+		tween.tween_property(circle_draw, "scale", Vector2(0.01, 0.01), 0.4).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_BACK)
+		tween.tween_property(circle_draw, "modulate:a", 0.0, 0.15)
+
+	# Screen red
+	if get_parent() and get_parent().has_method("screen_flash"):
+		get_parent().screen_flash(Color(1, 0, 0, 0.6), 0.5)
+
 	player_died_signal.emit()
 
 func _update_radius() -> void:
-	# Radius grows with mass (square root relationship for area)
 	var base_r: float = GameData.PLAYER_START_RADIUS
 	player_radius = base_r * sqrt(GameData.player_mass / 10.0)
 	player_radius = clamp(player_radius, 8.0, 120.0)
@@ -210,7 +358,6 @@ func apply_upgrade(upgrade_type: String) -> void:
 			dash_cooldown_reduction += 0.35
 
 func _return_entity_to_pool(entity: Area2D) -> void:
-	# Signal the spawner to reclaim it
 	entity.hide()
 	entity.set_process(false)
 	entity.monitoring = false

@@ -4,12 +4,11 @@ extends Node2D
 @export var player: Area2D
 
 # Pool settings
-const POOL_SIZE: int = 80
+const POOL_SIZE: int = 120
 const SPAWN_RADIUS_MIN: float = 350.0
 const SPAWN_RADIUS_MAX: float = 700.0
 const DESPAWN_RADIUS: float = 900.0
-const MAX_ACTIVE: int = 60
-const SPAWN_INTERVAL_BASE: float = 0.4
+const SPAWN_INTERVAL_BASE: float = 0.35
 
 # Entity size relative to player radius
 const SIZE_RATIO_MIN: float = 0.15
@@ -22,7 +21,8 @@ var difficulty_time: float = 0.0
 
 # Scale-specific settings
 var current_scale_index: int = 0
-var toxic_chance: float = 0.0  # Scale 3 introduces toxics
+var toxic_chance: float = 0.0
+var max_active: int = 60
 
 var _pool_built: bool = false
 
@@ -50,19 +50,19 @@ func _process(delta: float) -> void:
 	if spawn_timer <= 0.0:
 		_spawn_batch()
 		var interval: float = SPAWN_INTERVAL_BASE * (1.0 - clamp(difficulty_time / 120.0, 0.0, 0.6))
-		spawn_timer = max(0.15, interval)
+		spawn_timer = max(0.12, interval)
 
 	_check_despawn()
 
 func _spawn_batch() -> void:
-	if active_entities.size() >= MAX_ACTIVE:
+	if active_entities.size() >= max_active:
 		return
 	if not player:
 		return
 
-	var batch_count: int = randi_range(1, 3)
+	var batch_count: int = randi_range(1, 4)
 	for i in range(batch_count):
-		if active_entities.size() >= MAX_ACTIVE:
+		if active_entities.size() >= max_active:
 			break
 		_spawn_one()
 
@@ -79,17 +79,14 @@ func _spawn_one() -> void:
 	var dist: float = randf_range(SPAWN_RADIUS_MIN, SPAWN_RADIUS_MAX)
 	var spawn_pos: Vector2 = player.global_position + Vector2(cos(angle), sin(angle)) * dist
 
-	# Size: weighted toward edible (smaller than player)
+	# Size distribution: 60% smaller, 30% similar, 10% larger
 	var size_roll: float = randf()
 	var size_ratio: float
-	if size_roll < 0.55:
-		# Smaller — edible
-		size_ratio = randf_range(SIZE_RATIO_MIN, 0.85)
-	elif size_roll < 0.80:
-		# Similar — neutral/slight danger
-		size_ratio = randf_range(0.85, 1.15)
+	if size_roll < 0.60:
+		size_ratio = randf_range(SIZE_RATIO_MIN, 0.7)
+	elif size_roll < 0.90:
+		size_ratio = randf_range(0.7, 1.15)
 	else:
-		# Larger — dangerous
 		size_ratio = randf_range(1.15, SIZE_RATIO_MAX)
 
 	var radius: float = clamp(player_radius * size_ratio, 4.0, 150.0)
@@ -106,28 +103,42 @@ func _spawn_one() -> void:
 		entity.reset_entity(radius, toxic, color, speed, spawn_pos, current_scale_index)
 	entity.show()
 	entity.set_process(true)
+
+	# Entity type: 60% wanderer, 25% orbiter, 15% chaser (chasers only when player is large)
+	var type_roll: float = randf()
+	if type_roll < 0.60:
+		entity.setup_as_wanderer()
+	elif type_roll < 0.85:
+		# Orbiter: orbit a nearby point
+		var orbit_center: Vector2 = spawn_pos + Vector2(randf_range(-80, 80), randf_range(-80, 80))
+		var orbit_r: float = randf_range(40.0, 120.0)
+		entity.setup_as_orbiter(orbit_center, orbit_r)
+	else:
+		# Chasers only if player is somewhat large and entity is bigger
+		if player_radius > 24.0 and size_ratio > 1.0:
+			entity.setup_as_chaser(player, randf_range(20.0, 45.0))
+		else:
+			entity.setup_as_wanderer()
+
 	active_entities.append(entity)
 
 func _get_entity_color(size_ratio: float, toxic: bool) -> Color:
 	if toxic:
 		return Color(0.5, 0.0, 0.8)  # Purple for toxic
 
-	# Color by size: green (small/edible) → yellow (neutral) → red (dangerous)
-	if size_ratio < 0.7:
-		# Edible: green
-		return Color(0.1, 0.9, 0.3)
+	# Color gradient: smaller = cyan/green, similar = yellow, larger = red/orange
+	if size_ratio < 0.5:
+		return Color(0.0, 0.95, 0.7)  # Bright cyan
+	elif size_ratio < 0.7:
+		return Color(0.1, 0.9, 0.3)  # Green
 	elif size_ratio < 1.0:
-		# Slightly smaller: cyan
-		return Color(0.1, 0.8, 0.8)
+		return Color(0.1, 0.8, 0.8)  # Cyan
 	elif size_ratio < 1.15:
-		# Neutral: yellow
-		return Color(0.9, 0.85, 0.1)
+		return Color(0.95, 0.9, 0.1)  # Yellow
 	elif size_ratio < 1.8:
-		# Dangerous: orange-red
-		return Color(1.0, 0.4, 0.1)
+		return Color(1.0, 0.4, 0.1)  # Orange-red
 	else:
-		# Very dangerous: deep red
-		return Color(0.9, 0.05, 0.05)
+		return Color(0.9, 0.05, 0.05)  # Deep red
 
 func _check_despawn() -> void:
 	if not player:
@@ -137,12 +148,11 @@ func _check_despawn() -> void:
 		if not is_instance_valid(entity):
 			to_remove.append(entity)
 			continue
-		# Already returned to pool (eaten by player)
 		if not entity.visible:
 			to_remove.append(entity)
 			continue
-		var dist: float = entity.global_position.distance_to(player.global_position)
-		if dist > DESPAWN_RADIUS:
+		var d: float = entity.global_position.distance_to(player.global_position)
+		if d > DESPAWN_RADIUS:
 			to_remove.append(entity)
 			_return_to_pool(entity)
 
@@ -171,11 +181,20 @@ func refresh_for_scale(scale_idx: int) -> void:
 		0:  # Subatomic
 			toxic_chance = 0.0
 			difficulty_time = 0.0
+			max_active = 60
 		1:  # Atomic
 			toxic_chance = 0.0
 			difficulty_time = 20.0
+			max_active = 70
 		2:  # Molecular
 			toxic_chance = 0.20
+			max_active = 80
+		3:  # Cellular
+			toxic_chance = 0.25
+			max_active = 90
+		4:  # Planetary
+			toxic_chance = 0.30
+			max_active = 100
 
 	# Clear active entities on scale change
 	for entity in active_entities:

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" format=3 uid="uid://scale_cell001"]
+
+[resource]
+script_class = ""
+scale_name = "Cellular"
+scale_index = 3
+mass_threshold = 15000.0
+spawn_density = 1.4
+object_speed_min = 30.0
+object_speed_max = 80.0
+object_size_ratio_min = 0.1
+object_size_ratio_max = 3.5
+toxic_chance = 0.25
+background_color = Color(0.04, 0.02, 0.03, 1.0)
+accent_color = Color(0.9, 0.2, 0.5, 1.0)
