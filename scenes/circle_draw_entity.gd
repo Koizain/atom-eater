@@ -45,8 +45,10 @@ func _emit_sparkle() -> void:
 		main_node = entity_node.get_parent()
 	# Walk up to find main scene with add_sparkle method
 	var root: Node = main_node
-	while root and not root.has_method("add_sparkle"):
+	var _iter1: int = 0
+	while root and not root.has_method("add_sparkle") and _iter1 < 20:
 		root = root.get_parent()
+		_iter1 += 1
 	if root and root.has_method("add_sparkle"):
 		var data: Dictionary = entity_node.get_entity_data() if entity_node.has_method("get_entity_data") else {}
 		var color: Color = data.get("color", Color.WHITE)
@@ -65,8 +67,10 @@ func _update_tremble() -> void:
 		if players.is_empty():
 			# Try to find player by traversal
 			var main_node: Node = entity_node.get_parent()
-			while main_node and not main_node.has_method("shake_camera"):
+			var _iter2: int = 0
+			while main_node and not main_node.has_method("shake_camera") and _iter2 < 20:
 				main_node = main_node.get_parent()
+				_iter2 += 1
 			if main_node:
 				var p = main_node.get_node_or_null("Player")
 				if p:
