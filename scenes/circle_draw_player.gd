@@ -82,7 +82,7 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, _move_angle, Vector2(stretch_x, stretch_y))
 
 	# === HP-reactive outer halo ===
-	var hp_ratio: float = float(GameData.player_hp) / float(GameData.MAX_HP)
+	var hp_ratio: float = float(GameData.player_hp) / float(GameData.max_hp)
 	var halo_color: Color
 	if hp_ratio > 0.65:
 		# Green (full health)
@@ -132,7 +132,7 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, abs_radius, start_angle, start_angle + seg_arc, 8, Color(scale_color.r, scale_color.g, scale_color.b, ring_pulse), 1.5)
 
 	# === HP indicator rings (when damaged) ===
-	if GameData.player_hp < GameData.MAX_HP:
+	if GameData.player_hp < GameData.max_hp:
 		var hp_color: Color = Color(1.0, 0.2, 0.2, 0.3 + 0.2 * sin(pulse_time * 4.0))
 		draw_arc(Vector2.ZERO, radius * 1.1, 0.0, TAU, 36, hp_color, 2.0)
 

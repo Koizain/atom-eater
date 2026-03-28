@@ -4,8 +4,8 @@ signal transition_started(new_scale: int)
 signal transition_finished(new_scale: int)
 signal upgrade_selection_requested()
 
-@export var camera: Camera2D
-@export var entity_spawner: Node
+var camera = null
+var entity_spawner = null
 
 var is_transitioning: bool = false
 var invincibility_timer: float = 0.0

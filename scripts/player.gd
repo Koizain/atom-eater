@@ -74,10 +74,10 @@ var gravity_cooldown_timer: float = 0.0
 const GRAVITY_COOLDOWN: float = 5.0
 
 # Scale manager reference
-var scale_manager: Node = null
+var scale_manager = null
 
 # Entity spawner reference (for chain eating and splitter spawns)
-var entity_spawner: Node = null
+var entity_spawner = null
 
 # Viewport size for screen wrapping
 var viewport_size: Vector2 = Vector2(1920, 1080)

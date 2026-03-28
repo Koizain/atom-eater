@@ -1,11 +1,11 @@
 extends Node2D
 
-@onready var player: Area2D = $Player
-@onready var camera: Camera2D = $Camera2D
-@onready var entity_spawner: Node2D = $EntitySpawner
-@onready var scale_manager: Node = $ScaleManager
-@onready var hud: CanvasLayer = $HUD
-@onready var game_over_screen: CanvasLayer = $GameOverScreen
+@onready var player = $Player
+@onready var camera = $Camera2D
+@onready var entity_spawner = $EntitySpawner
+@onready var scale_manager = $ScaleManager
+@onready var hud = $HUD
+@onready var game_over_screen = $GameOverScreen
 @onready var background: ColorRect = $BackgroundLayer/Background
 @onready var scale_label_flash: Label = $UIOverlay/ScaleTransitionLabel
 @onready var screen_flash_rect: ColorRect = $UIOverlay/ScreenFlashRect

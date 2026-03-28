@@ -1,7 +1,7 @@
 extends Node2D
 
 @export var entity_scene: PackedScene = preload("res://scenes/entity.tscn")
-@export var player: Area2D
+var player = null
 
 # Pool settings
 const POOL_SIZE: int = 150
