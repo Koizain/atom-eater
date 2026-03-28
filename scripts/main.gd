@@ -112,6 +112,10 @@ func _ready() -> void:
 	_build_upgrade_ui()
 	shooting_star_timer = randf_range(SHOOTING_STAR_INTERVAL_MIN, SHOOTING_STAR_INTERVAL_MAX)
 
+# Throttle main scene redraw
+var _main_redraw_timer: float = 0.0
+const MAIN_REDRAW_INTERVAL: float = 0.016  # ~60fps cap for draw calls
+
 func _process(delta: float) -> void:
 	if is_game_over:
 		return
@@ -122,7 +126,7 @@ func _process(delta: float) -> void:
 	_update_nebula_wisps(delta)
 	_update_death_particles(delta)
 	_update_sparkle_trails(delta)
-	_update_background()
+	_update_background(delta)
 
 # ── Upgrade UI construction ───────────────────────────────────────
 
@@ -194,14 +198,14 @@ func _show_upgrade_selection() -> void:
 
 	upgrade_overlay.visible = true
 	upgrade_overlay.modulate.a = 0.0
-
-	# Animate in
-	var tween: Tween = create_tween()
-	tween.tween_property(upgrade_overlay, "modulate:a", 1.0, 0.3).set_ease(Tween.EASE_OUT)
+	upgrade_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
 
 	# Pause the game tree (but keep UI responding)
 	get_tree().paused = true
-	upgrade_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
+
+	# Animate in — must use upgrade_overlay's tween since tree is paused
+	var tween: Tween = upgrade_overlay.create_tween()
+	tween.tween_property(upgrade_overlay, "modulate:a", 1.0, 0.3).set_ease(Tween.EASE_OUT)
 
 func _create_upgrade_card(upg: Dictionary, _index: int) -> Panel:
 	var card: Panel = Panel.new()
@@ -284,9 +288,9 @@ func _on_upgrade_selected(upgrade_id: String) -> void:
 	# Apply upgrade to player
 	player.apply_upgrade(upgrade_id)
 
-	# Animate out
-	var tween: Tween = create_tween()
-	tween.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
+	# Animate out — use upgrade_overlay's tween since tree is paused
+	# and upgrade_overlay has PROCESS_MODE_ALWAYS
+	var tween: Tween = upgrade_overlay.create_tween()
 	tween.tween_property(upgrade_overlay, "modulate:a", 0.0, 0.2).set_ease(Tween.EASE_IN)
 	tween.tween_callback(_hide_upgrade_ui)
 
@@ -305,6 +309,8 @@ func _on_upgrade_selection_requested() -> void:
 # ── Afterimage system ──────────────────────────────────────────────
 
 func add_afterimage(pos: Vector2, radius: float, color: Color) -> void:
+	if afterimages.size() >= 30:
+		return
 	afterimages.append({
 		"position": pos,
 		"radius": radius,
@@ -338,6 +344,8 @@ func _update_shockwaves(delta: float) -> void:
 # ── Death particle system ─────────────────────────────────────────
 
 func spawn_death_particles(pos: Vector2, color: Color, radius: float) -> void:
+	if death_particles.size() >= 60:
+		return
 	var count: int = randi_range(4, 6)
 	for i in range(count):
 		var angle: float = randf() * TAU
@@ -368,6 +376,8 @@ func _update_death_particles(delta: float) -> void:
 # ── Sparkle trail system ──────────────────────────────────────────
 
 func add_sparkle(pos: Vector2, color: Color) -> void:
+	if sparkle_trails.size() >= 200:
+		return  # Cap sparkle count
 	sparkle_trails.append({
 		"position": pos + Vector2(randf_range(-3, 3), randf_range(-3, 3)),
 		"color": color,
@@ -470,8 +480,8 @@ func _draw() -> void:
 	for sw in shockwaves:
 		var t: float = 1.0 - (sw.radius / sw.max_radius)
 		var sc: Color = GameData.get_scale_color()
-		draw_arc(sw.position, sw.radius, 0.0, TAU, 64, Color(sc.r, sc.g, sc.b, t * 0.5), 3.0)
-		draw_arc(sw.position, sw.radius * 0.85, 0.0, TAU, 48, Color(1.0, 1.0, 1.0, t * 0.25), 1.5)
+		draw_arc(sw.position, sw.radius, 0.0, TAU, 32, Color(sc.r, sc.g, sc.b, t * 0.5), 3.0)
+		draw_arc(sw.position, sw.radius * 0.85, 0.0, TAU, 24, Color(1.0, 1.0, 1.0, t * 0.25), 1.5)
 
 	# Draw hex pattern overlay during scale transition
 	if scale_manager and scale_manager.hex_pattern_alpha > 0.01:
@@ -568,11 +578,16 @@ func _update_nebula_wisps(delta: float) -> void:
 
 # ── Background & stars ─────────────────────────────────────────────
 
-func _update_background() -> void:
+func _update_background(delta: float = 0.016) -> void:
 	if background and GameData.current_scale < BG_COLORS.size():
 		var target_color: Color = BG_COLORS[GameData.current_scale]
 		background.color = background.color.lerp(target_color, 0.02)
-	queue_redraw()
+	# Only redraw when there are active visual effects, or at a throttled rate
+	var has_effects: bool = not afterimages.is_empty() or not shockwaves.is_empty() or not death_particles.is_empty() or not sparkle_trails.is_empty() or not shooting_stars.is_empty()
+	_main_redraw_timer -= delta
+	if has_effects or _main_redraw_timer <= 0.0:
+		_main_redraw_timer = MAIN_REDRAW_INTERVAL
+		queue_redraw()
 
 func _generate_stars() -> void:
 	for layer_idx in range(3):

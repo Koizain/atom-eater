@@ -55,6 +55,12 @@ func _build_pool() -> void:
 		var entity: Area2D = entity_scene.instantiate()
 		entity.hide()
 		entity.set_process(false)
+		entity.set_process_internal(false)
+		# Disable collisions for pooled entities
+		entity.monitoring = false
+		entity.monitorable = false
+		for child in entity.get_children():
+			child.set_process(false)
 		add_child(entity)
 		entity_pool.append(entity)
 
@@ -211,8 +217,17 @@ func _assign_entity_type(entity: Area2D, size_ratio: float, player_radius: float
 			_assign_flock(entity)
 
 func _assign_flock(entity: Area2D) -> void:
+	# Purge empty flocks periodically
+	if flock_spawn_counter.size() > 50:
+		var to_erase: Array[int] = []
+		for fid in flock_spawn_counter:
+			if flock_spawn_counter[fid] <= 0:
+				to_erase.append(fid)
+		for fid in to_erase:
+			flock_spawn_counter.erase(fid)
+
 	# Find an existing flock that needs more members
-	for fid in flock_spawn_counter.keys():
+	for fid in flock_spawn_counter:
 		if flock_spawn_counter[fid] < FLOCK_SIZE_MAX:
 			entity.flock_id = fid
 			flock_spawn_counter[fid] += 1
@@ -434,6 +449,8 @@ func _check_despawn_and_recycle() -> void:
 			to_remove.append(entity)
 			continue
 		if not entity.visible:
+			# Clean up flock tracking for eaten/hidden entities
+			_cleanup_flock(entity)
 			to_remove.append(entity)
 			continue
 		var d: float = entity.global_position.distance_to(player.global_position)
@@ -446,6 +463,13 @@ func _check_despawn_and_recycle() -> void:
 
 	for e in to_remove:
 		active_entities.erase(e)
+
+func _cleanup_flock(entity: Area2D) -> void:
+	if "flock_id" in entity and entity.flock_id >= 0:
+		if flock_spawn_counter.has(entity.flock_id):
+			flock_spawn_counter[entity.flock_id] -= 1
+			if flock_spawn_counter[entity.flock_id] <= 0:
+				flock_spawn_counter.erase(entity.flock_id)
 
 func _get_pooled_entity() -> Area2D:
 	for entity in entity_pool:
@@ -462,6 +486,9 @@ func _return_to_pool(entity: Area2D) -> void:
 	entity.set_process(false)
 	entity.monitoring = false
 	entity.monitorable = false
+	# Stop children processing too
+	for child in entity.get_children():
+		child.set_process(false)
 	# Clean up flock tracking
 	if "flock_id" in entity and entity.flock_id >= 0:
 		if flock_spawn_counter.has(entity.flock_id):

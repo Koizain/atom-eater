@@ -17,6 +17,9 @@ var progress_glow_time: float = 0.0
 # Smooth progress bar
 var display_progress: float = 0.0
 
+# Cached progress bar style — reuse instead of creating new one every frame
+var _progress_style: StyleBoxFlat = null
+
 func _ready() -> void:
 	mass_label = get_node_or_null("VBoxContainer/MassLabel")
 	GameData.scale_changed.connect(_on_scale_changed)
@@ -53,16 +56,17 @@ func _update_hud(delta: float) -> void:
 		display_progress = lerp(display_progress, target, 5.0 * delta)
 		progress_bar.value = display_progress
 
-		# Animated glow on progress bar fill
+		# Animated glow on progress bar fill — reuse cached style
 		var glow_alpha: float = 0.6 + 0.4 * sin(progress_glow_time * 3.0)
 		var sc: Color = GameData.get_scale_color()
-		var style: StyleBoxFlat = StyleBoxFlat.new()
-		style.bg_color = Color(sc.r, sc.g, sc.b, glow_alpha)
-		style.corner_radius_top_left = 4
-		style.corner_radius_top_right = 4
-		style.corner_radius_bottom_left = 4
-		style.corner_radius_bottom_right = 4
-		progress_bar.add_theme_stylebox_override("fill", style)
+		if not _progress_style:
+			_progress_style = StyleBoxFlat.new()
+			_progress_style.corner_radius_top_left = 4
+			_progress_style.corner_radius_top_right = 4
+			_progress_style.corner_radius_bottom_left = 4
+			_progress_style.corner_radius_bottom_right = 4
+			progress_bar.add_theme_stylebox_override("fill", _progress_style)
+		_progress_style.bg_color = Color(sc.r, sc.g, sc.b, glow_alpha)
 
 	# Mass counter
 	if mass_label:

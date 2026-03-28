@@ -259,18 +259,23 @@ func _handle_magnetism(_delta: float) -> void:
 		return
 
 	var pull_range: float = player_radius * 4.0
+	var pull_range_sq: float = pull_range * pull_range
+	var player_radius_sq: float = player_radius * player_radius
+	var size_threshold: float = player_radius * 0.8
+	var dt: float = get_process_delta_time()
+	var pos: Vector2 = global_position
+
 	for entity in entity_spawner.active_entities:
 		if not is_instance_valid(entity) or not entity.visible:
 			continue
-		var e_radius: float = entity.entity_radius if "entity_radius" in entity else 10.0
-		# Only attract entities smaller than us
-		if e_radius >= player_radius * 0.8:
+		if entity.entity_radius >= size_threshold:
 			continue
-		var offset: Vector2 = global_position - entity.global_position
-		var dist: float = offset.length()
-		if dist < pull_range and dist > player_radius:
+		var offset: Vector2 = pos - entity.global_position
+		var dist_sq: float = offset.length_squared()
+		if dist_sq < pull_range_sq and dist_sq > player_radius_sq:
+			var dist: float = sqrt(dist_sq)
 			var strength: float = (1.0 - dist / pull_range) * 40.0
-			entity.global_position += offset.normalized() * strength * get_process_delta_time()
+			entity.global_position += offset / dist * strength * dt
 
 func _handle_gravity_cooldown(delta: float) -> void:
 	if gravity_cooldown_timer > 0.0:
@@ -647,6 +652,9 @@ func _return_entity_to_pool(entity: Area2D) -> void:
 	entity.set_process(false)
 	entity.set_deferred("monitoring", false)
 	entity.set_deferred("monitorable", false)
+	# Stop children processing too
+	for child in entity.get_children():
+		child.set_process(false)
 
 func get_absorption_radius() -> float:
 	return player_radius * (1.2 + absorption_radius_bonus)

@@ -13,77 +13,86 @@ var time: float = 0.0
 
 # Sparkle emission
 var sparkle_timer: float = 0.0
-const SPARKLE_INTERVAL: float = 0.08
+const SPARKLE_INTERVAL: float = 0.15  # Reduced frequency
 
 # Tremble state
 var tremble_offset: Vector2 = Vector2.ZERO
 
-func _process(delta: float) -> void:
-	time += delta
+# Cached references — avoid tree traversal every frame
+var _cached_main: Node = null
+var _cached_player: Node2D = null
+var _cache_checked: bool = false
 
+# Throttle redraw — only redraw every N frames
+var _frame_counter: int = 0
+const REDRAW_EVERY_N_FRAMES: int = 2
+
+func _process(delta: float) -> void:
 	if not entity_node:
 		entity_node = get_parent() as Area2D
 	if not entity_node:
 		return
 
+	# Skip ALL processing when entity is hidden (pooled)
+	if not entity_node.visible:
+		return
+
+	time += delta
+
+	# Cache references once
+	if not _cache_checked:
+		_cache_checked = true
+		_find_and_cache_refs()
+
 	# Sparkle trail emission
 	sparkle_timer -= delta
-	if sparkle_timer <= 0.0 and entity_node.visible:
+	if sparkle_timer <= 0.0:
 		sparkle_timer = SPARKLE_INTERVAL
 		_emit_sparkle()
 
 	# Tremble when player is nearby (about to be absorbed)
 	_update_tremble()
 
-	queue_redraw()
+	# Only redraw every N frames
+	_frame_counter += 1
+	if _frame_counter >= REDRAW_EVERY_N_FRAMES:
+		_frame_counter = 0
+		queue_redraw()
+
+func _find_and_cache_refs() -> void:
+	if not entity_node:
+		return
+	# Walk up once to find main node
+	var node: Node = entity_node.get_parent()
+	var _iter: int = 0
+	while node and not node.has_method("add_sparkle") and _iter < 20:
+		node = node.get_parent()
+		_iter += 1
+	if node and node.has_method("add_sparkle"):
+		_cached_main = node
+		var p = node.get_node_or_null("Player")
+		if p:
+			_cached_player = p
 
 func _emit_sparkle() -> void:
 	if not entity_node or not entity_node.is_active:
 		return
-	var main_node: Node = entity_node.get_parent()
-	if main_node == null:
-		main_node = entity_node.get_parent()
-	# Walk up to find main scene with add_sparkle method
-	var root: Node = main_node
-	var _iter1: int = 0
-	while root and not root.has_method("add_sparkle") and _iter1 < 20:
-		root = root.get_parent()
-		_iter1 += 1
-	if root and root.has_method("add_sparkle"):
-		var data: Dictionary = entity_node.get_entity_data() if entity_node.has_method("get_entity_data") else {}
-		var color: Color = data.get("color", Color.WHITE)
-		root.add_sparkle(entity_node.global_position, color)
+	if _cached_main and is_instance_valid(_cached_main):
+		_cached_main.add_sparkle(entity_node.global_position, entity_node.entity_color)
 
 func _update_tremble() -> void:
 	if not entity_node:
 		tremble_offset = Vector2.ZERO
 		return
 
-	# Find player distance
-	var player: Node2D = null
-	var tree: SceneTree = entity_node.get_tree()
-	if tree:
-		var players = tree.get_nodes_in_group("player") if tree.has_method("get_nodes_in_group") else []
-		if players.is_empty():
-			# Try to find player by traversal
-			var main_node: Node = entity_node.get_parent()
-			var _iter2: int = 0
-			while main_node and not main_node.has_method("shake_camera") and _iter2 < 20:
-				main_node = main_node.get_parent()
-				_iter2 += 1
-			if main_node:
-				var p = main_node.get_node_or_null("Player")
-				if p:
-					player = p
-
-	if not player or not is_instance_valid(player):
+	if not _cached_player or not is_instance_valid(_cached_player):
 		tremble_offset = Vector2.ZERO
 		return
 
-	var dist: float = entity_node.global_position.distance_to(player.global_position)
+	var dist: float = entity_node.global_position.distance_to(_cached_player.global_position)
 	var player_radius: float = 16.0
-	if player.has_method("get_absorption_radius"):
-		player_radius = player.get_absorption_radius()
+	if _cached_player.has_method("get_absorption_radius"):
+		player_radius = _cached_player.get_absorption_radius()
 
 	# Tremble when within 1.5x absorption radius
 	if dist < player_radius * 1.5 and dist > 0.0:
@@ -99,16 +108,12 @@ func _draw() -> void:
 	if not entity_node:
 		entity_node = get_parent() as Area2D
 
-	if not entity_node:
+	if not entity_node or not entity_node.visible:
 		return
 
-	var data: Dictionary = {}
-	if entity_node.has_method("get_entity_data"):
-		data = entity_node.get_entity_data()
-
-	var radius: float = data.get("radius", 10.0)
-	var color: Color = data.get("color", Color(0.2, 0.9, 0.3))
-	var is_toxic: bool = data.get("is_toxic", false)
+	var radius: float = entity_node.entity_radius
+	var color: Color = entity_node.entity_color
+	var is_toxic: bool = entity_node.is_toxic
 
 	# Phase-offset bob
 	var phase: float = float(entity_node.get_instance_id()) * 0.1
@@ -121,7 +126,7 @@ func _draw() -> void:
 	if is_toxic:
 		_draw_toxic(center, radius, color)
 	else:
-		var etype: int = data.get("entity_type", 0)
+		var etype: int = entity_node.entity_type
 		match etype:
 			0:  # WANDERER
 				_draw_wanderer(center, radius, color, phase)
@@ -177,17 +182,17 @@ func _draw_orbiter(center: Vector2, radius: float, color: Color, phase: float) -
 
 	# Main ring (thick arc = full circle)
 	var ring_width: float = maxf(r * 0.3, 1.5)
-	draw_arc(center, r, 0.0, TAU, 48, Color(color.r * 0.6 + 0.15, color.g * 0.6 + 0.15, color.b * 0.6 + 0.15, 0.85), ring_width)
+	draw_arc(center, r, 0.0, TAU, 24, Color(color.r * 0.6 + 0.15, color.g * 0.6 + 0.15, color.b * 0.6 + 0.15, 0.85), ring_width)
 	# Inner bright ring
-	draw_arc(center, r * 0.7, 0.0, TAU, 36, Color(color.r, color.g, color.b, 0.35), maxf(ring_width * 0.4, 1.0))
+	draw_arc(center, r * 0.7, 0.0, TAU, 16, Color(color.r, color.g, color.b, 0.35), maxf(ring_width * 0.4, 1.0))
 	# Outer bright ring
-	draw_arc(center, r * 1.15, 0.0, TAU, 36, Color(color.r, color.g, color.b, 0.2), maxf(ring_width * 0.3, 1.0))
+	draw_arc(center, r * 1.15, 0.0, TAU, 16, Color(color.r, color.g, color.b, 0.2), maxf(ring_width * 0.3, 1.0))
 
 	# Faint orbit trail — draw arc behind the orbiter
 	if entity_node and "orbit_angle" in entity_node:
 		var trail_start: float = entity_node.orbit_angle - PI * 0.6
 		var trail_end: float = entity_node.orbit_angle
-		draw_arc(center, r * 0.9, trail_start, trail_end, 16, Color(color.r, color.g, color.b, 0.12), maxf(ring_width * 0.2, 1.0))
+		draw_arc(center, r * 0.9, trail_start, trail_end, 8, Color(color.r, color.g, color.b, 0.12), maxf(ring_width * 0.2, 1.0))
 
 	# Rotating bright dot on the ring
 	var dot_angle: float = time * 2.5 + phase

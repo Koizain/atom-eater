@@ -77,6 +77,7 @@ func _process_wanderer(delta: float) -> void:
 		drift_velocity = Vector2(cos(angle), sin(angle)) * drift_speed
 
 	# Flocking behavior if we have a spawner reference
+	_flock_calc_timer -= delta
 	if spawner_ref and flock_id >= 0:
 		var flock_force: Vector2 = _calculate_flock_force()
 		drift_velocity += flock_force * delta * 3.0
@@ -105,7 +106,17 @@ func _process_wanderer(delta: float) -> void:
 
 	global_position += drift_velocity * delta
 
+# Cached flock force — recalculated every few frames, not every frame
+var _cached_flock_force: Vector2 = Vector2.ZERO
+var _flock_calc_timer: float = 0.0
+const FLOCK_CALC_INTERVAL: float = 0.15  # Recalculate every 150ms
+
 func _calculate_flock_force() -> Vector2:
+	if _flock_calc_timer > 0.0:
+		return _cached_flock_force
+
+	_flock_calc_timer = FLOCK_CALC_INTERVAL
+
 	if not spawner_ref or not is_instance_valid(spawner_ref):
 		return Vector2.ZERO
 
@@ -114,31 +125,31 @@ func _calculate_flock_force() -> Vector2:
 	var cohesion: Vector2 = Vector2.ZERO
 	var neighbor_count: int = 0
 	var center_of_mass: Vector2 = Vector2.ZERO
-	var flock_radius: float = 150.0
+	var flock_radius_sq: float = 150.0 * 150.0  # Use squared distance
 
 	var active: Array = spawner_ref.active_entities
 	for other in active:
 		if not is_instance_valid(other) or other == self:
 			continue
-		if not "flock_id" in other or other.flock_id != flock_id:
+		if other.flock_id != flock_id:
 			continue
-		if not "entity_type" in other or other.entity_type != EntityType.WANDERER:
+		if other.entity_type != EntityType.WANDERER:
 			continue
 
 		var offset: Vector2 = global_position - other.global_position
-		var dist: float = offset.length()
+		var dist_sq: float = offset.length_squared()
 
-		if dist < flock_radius and dist > 0.0:
+		if dist_sq < flock_radius_sq and dist_sq > 0.0:
 			neighbor_count += 1
 			center_of_mass += other.global_position
 
 			# Separation: push away from too-close neighbors
-			if dist < 50.0:
+			if dist_sq < 2500.0:  # 50^2
+				var dist: float = sqrt(dist_sq)
 				separation += offset.normalized() * (50.0 / dist)
 
 			# Alignment: match neighbor velocity
-			if "drift_velocity" in other:
-				alignment += other.drift_velocity
+			alignment += other.drift_velocity
 
 	if neighbor_count > 0:
 		center_of_mass /= float(neighbor_count)
@@ -146,7 +157,8 @@ func _calculate_flock_force() -> Vector2:
 		cohesion = (center_of_mass - global_position).normalized() * drift_speed * 0.3
 		alignment = (alignment / float(neighbor_count)).normalized() * drift_speed * 0.2
 
-	return separation * 1.5 + alignment + cohesion
+	_cached_flock_force = separation * 1.5 + alignment + cohesion
+	return _cached_flock_force
 
 # ── Orbiter: Drift to new centers, panic on player approach ──────
 
@@ -229,22 +241,27 @@ func _process_absorber(delta: float) -> void:
 	# Slow drift
 	global_position += drift_velocity * delta * 0.3
 
-	# Pull nearby entities toward us
-	if spawner_ref and is_instance_valid(spawner_ref):
+	# Pull nearby entities toward us (throttled)
+	_flock_calc_timer -= delta
+	if spawner_ref and is_instance_valid(spawner_ref) and _flock_calc_timer <= 0.0:
+		_flock_calc_timer = 0.05  # Check pull every 50ms
+		var pull_radius_sq: float = pull_radius * pull_radius
+		var entity_radius_sq: float = entity_radius * entity_radius
+		var pos: Vector2 = global_position
 		for other in spawner_ref.active_entities:
 			if not is_instance_valid(other) or other == self:
 				continue
 			if not other.visible or not other.is_active:
 				continue
-			var other_radius: float = other.entity_radius if "entity_radius" in other else 10.0
-			if other_radius >= entity_radius:
-				continue  # Only pull smaller entities
+			if other.entity_radius >= entity_radius:
+				continue
 
-			var offset: Vector2 = global_position - other.global_position
-			var dist: float = offset.length()
-			if dist < pull_radius and dist > entity_radius:
+			var offset: Vector2 = pos - other.global_position
+			var dist_sq: float = offset.length_squared()
+			if dist_sq < pull_radius_sq and dist_sq > entity_radius_sq:
+				var dist: float = sqrt(dist_sq)
 				var pull_force: float = pull_strength * (1.0 - dist / pull_radius) * delta
-				other.global_position += offset.normalized() * pull_force
+				other.global_position += offset / dist * pull_force
 
 	# Slow player in pull zone
 	if player_ref and is_instance_valid(player_ref):
@@ -338,3 +355,6 @@ func reset_entity(radius: float, toxic: bool, color: Color, speed: float, pos: V
 	setup(radius, toxic, color, speed, scale_idx)
 	show()
 	set_process(true)
+	# Re-enable children processing
+	for child in get_children():
+		child.set_process(true)
