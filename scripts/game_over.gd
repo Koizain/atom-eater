@@ -1,11 +1,13 @@
 extends CanvasLayer
 
-@onready var title_label: Label = $CenterContainer/VBoxContainer/TitleLabel
-@onready var scale_label: Label = $CenterContainer/VBoxContainer/ScaleReachedLabel
-@onready var eaten_label: Label = $CenterContainer/VBoxContainer/EatenLabel
-@onready var combo_label: Label = $CenterContainer/VBoxContainer/ComboLabel
-@onready var fragments_label: Label = $CenterContainer/VBoxContainer/FragmentsLabel
-@onready var restart_button: Button = $CenterContainer/VBoxContainer/RestartButton
+@onready var center_container: CenterContainer = $CenterContainer
+@onready var color_rect: ColorRect = $ColorRect
+@onready var title_label: Label = $CenterContainer/VBoxContainer/Panel/InnerBox/TitleLabel
+@onready var scale_label: Label = $CenterContainer/VBoxContainer/Panel/InnerBox/ScaleReachedLabel
+@onready var eaten_label: Label = $CenterContainer/VBoxContainer/Panel/InnerBox/EatenLabel
+@onready var combo_label: Label = $CenterContainer/VBoxContainer/Panel/InnerBox/ComboLabel
+@onready var fragments_label: Label = $CenterContainer/VBoxContainer/Panel/InnerBox/FragmentsLabel
+@onready var restart_button: Button = $CenterContainer/VBoxContainer/Panel/InnerBox/RestartButton
 
 func _ready() -> void:
 	if restart_button:
@@ -28,10 +30,17 @@ func show_game_over() -> void:
 		fragments_label.text = "⬡ Color Fragments earned: " + str(fragments)
 
 	show()
-	# Animate in
-	modulate.a = 0.0
+	# Animate in — CanvasLayer has no modulate, so fade child Control nodes
+	if center_container:
+		center_container.modulate.a = 0.0
+	if color_rect:
+		color_rect.modulate.a = 0.0
 	var tween: Tween = create_tween()
-	tween.tween_property(self, "modulate:a", 1.0, 0.4)
+	tween.set_parallel(true)
+	if center_container:
+		tween.tween_property(center_container, "modulate:a", 1.0, 0.4)
+	if color_rect:
+		tween.tween_property(color_rect, "modulate:a", 1.0, 0.4)
 
 func _on_restart_pressed() -> void:
 	GameData.reset_run()
