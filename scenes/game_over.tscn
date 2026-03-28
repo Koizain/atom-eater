@@ -1,0 +1,96 @@
+[gd_scene load_steps=4 format=3 uid="uid://gameover001"]
+
+[ext_resource type="Script" path="res://scripts/game_over.gd" id="1_gameover"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.05, 0.03, 0.08, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.5, 0.2, 0.8, 0.8)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_left = 12
+corner_radius_bottom_right = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button"]
+bg_color = Color(0.3, 0.1, 0.5, 0.9)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_left = 8
+corner_radius_bottom_right = 8
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7, 0.3, 1.0, 0.8)
+
+[node name="GameOverScreen" type="CanvasLayer"]
+script = ExtResource("1_gameover")
+layer = 20
+
+[node name="ColorRect" type="ColorRect" parent="."]
+color = Color(0.0, 0.0, 0.0, 0.6)
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer"]
+custom_minimum_size = Vector2(480.0, 0.0)
+theme_override_constants/separation = 18
+
+[node name="Panel" type="PanelContainer" parent="CenterContainer/VBoxContainer"]
+add_theme_stylebox_override("panel", SubResource("StyleBoxFlat_panel"))
+
+[node name="InnerBox" type="VBoxContainer" parent="CenterContainer/VBoxContainer/Panel"]
+theme_override_constants/separation = 16
+offset_left = 40.0
+offset_top = 40.0
+offset_right = -40.0
+offset_bottom = -40.0
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/VBoxContainer/Panel/InnerBox"]
+text = "YOU WERE EATEN"
+theme_override_font_sizes/font_size = 44
+theme_override_colors/font_color = Color(1.0, 0.2, 0.2, 1.0)
+horizontal_alignment = 1
+
+[node name="Separator" type="HSeparator" parent="CenterContainer/VBoxContainer/Panel/InnerBox"]
+
+[node name="ScaleReachedLabel" type="Label" parent="CenterContainer/VBoxContainer/Panel/InnerBox"]
+text = "Scale reached: Subatomic"
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(0.7, 0.7, 1.0, 1.0)
+horizontal_alignment = 1
+
+[node name="EatenLabel" type="Label" parent="CenterContainer/VBoxContainer/Panel/InnerBox"]
+text = "Particles eaten: 0"
+theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(0.5, 0.9, 0.5, 1.0)
+horizontal_alignment = 1
+
+[node name="ComboLabel" type="Label" parent="CenterContainer/VBoxContainer/Panel/InnerBox"]
+text = "Max combo: x0"
+theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(1.0, 0.85, 0.1, 1.0)
+horizontal_alignment = 1
+
+[node name="FragmentsLabel" type="Label" parent="CenterContainer/VBoxContainer/Panel/InnerBox"]
+text = "⬡ Color Fragments earned: 0"
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_color = Color(0.9, 0.5, 1.0, 1.0)
+horizontal_alignment = 1
+
+[node name="RestartButton" type="Button" parent="CenterContainer/VBoxContainer/Panel/InnerBox"]
+text = "RESTART"
+custom_minimum_size = Vector2(200.0, 50.0)
+theme_override_font_sizes/font_size = 22
+add_theme_stylebox_override("normal", SubResource("StyleBoxFlat_button"))
+size_flags_horizontal = 4

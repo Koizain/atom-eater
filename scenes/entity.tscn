@@ -1,0 +1,18 @@
+[gd_scene load_steps=4 format=3 uid="uid://entity001"]
+
+[ext_resource type="Script" path="res://scripts/entity.gd" id="1_entity"]
+[ext_resource type="Script" path="res://scenes/circle_draw_entity.gd" id="2_draw"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_1"]
+radius = 10.0
+
+[node name="Entity" type="Area2D"]
+script = ExtResource("1_entity")
+collision_layer = 2
+collision_mask = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_1")
+
+[node name="CircleDraw" type="Node2D" parent="."]
+script = ExtResource("2_draw")

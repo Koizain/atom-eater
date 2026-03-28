@@ -1,0 +1,15 @@
+[gd_resource type="Resource" format=3 uid="uid://scale_atom001"]
+
+[resource]
+script_class = ""
+scale_name = "Atomic"
+scale_index = 1
+mass_threshold = 1225.0
+spawn_density = 1.0
+object_speed_min = 18.0
+object_speed_max = 55.0
+object_size_ratio_min = 0.12
+object_size_ratio_max = 3.0
+toxic_chance = 0.0
+background_color = Color(0.02, 0.05, 0.04, 1.0)
+accent_color = Color(0.2, 1.0, 0.6, 1.0)

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" format=3 uid="uid://scale_sub001"]
+
+[resource]
+script_class = ""
+scale_name = "Subatomic"
+scale_index = 0
+mass_threshold = 350.0
+spawn_density = 0.8
+object_speed_min = 10.0
+object_speed_max = 35.0
+object_size_ratio_min = 0.15
+object_size_ratio_max = 2.8
+toxic_chance = 0.0
+background_color = Color(0.039, 0.039, 0.059, 1.0)
+accent_color = Color(0.3, 0.5, 1.0, 1.0)

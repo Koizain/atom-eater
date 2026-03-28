@@ -1,0 +1,63 @@
+[gd_scene load_steps=8 format=3 uid="uid://main001"]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="2_player"]
+[ext_resource type="Script" path="res://scripts/entity_spawner.gd" id="3_spawner"]
+[ext_resource type="Script" path="res://scripts/scale_manager.gd" id="4_scale_manager"]
+[ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="5_hud"]
+[ext_resource type="PackedScene" path="res://scenes/game_over.tscn" id="6_gameover"]
+[ext_resource type="Script" path="res://scripts/camera.gd" id="7_camera"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="BackgroundLayer" type="CanvasLayer" parent="."]
+layer = -10
+
+[node name="Background" type="ColorRect" parent="BackgroundLayer"]
+color = Color(0.039, 0.039, 0.059, 1.0)
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="Camera2D" type="Camera2D" parent="."]
+script = ExtResource("7_camera")
+position = Vector2(0, 0)
+zoom = Vector2(1.0, 1.0)
+position_smoothing_enabled = true
+position_smoothing_speed = 8.0
+
+[node name="ScaleManager" type="Node" parent="."]
+script = ExtResource("4_scale_manager")
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+position = Vector2(0, 0)
+
+[node name="EntitySpawner" type="Node2D" parent="."]
+script = ExtResource("3_spawner")
+position = Vector2(0, 0)
+
+[node name="HUD" parent="." instance=ExtResource("5_hud")]
+
+[node name="GameOverScreen" parent="." instance=ExtResource("6_gameover")]
+
+[node name="UIOverlay" type="CanvasLayer" parent="."]
+layer = 5
+
+[node name="ScaleTransitionLabel" type="Label" parent="UIOverlay"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.3
+anchor_right = 0.5
+anchor_bottom = 0.3
+offset_left = -300.0
+offset_top = -30.0
+offset_right = 300.0
+offset_bottom = 30.0
+grow_horizontal = 2
+text = ""
+theme_override_font_sizes/font_size = 38
+theme_override_colors/font_color = Color(0.9, 0.9, 1.0, 1.0)
+horizontal_alignment = 1
+modulate = Color(1.0, 1.0, 1.0, 0.0)

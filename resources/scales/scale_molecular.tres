@@ -1,0 +1,15 @@
+[gd_resource type="Resource" format=3 uid="uid://scale_mol001"]
+
+[resource]
+script_class = ""
+scale_name = "Molecular"
+scale_index = 2
+mass_threshold = 9999999.0
+spawn_density = 1.2
+object_speed_min = 25.0
+object_speed_max = 75.0
+object_size_ratio_min = 0.1
+object_size_ratio_max = 3.2
+toxic_chance = 0.2
+background_color = Color(0.05, 0.02, 0.06, 1.0)
+accent_color = Color(1.0, 0.5, 0.1, 1.0)
