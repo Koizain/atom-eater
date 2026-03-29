@@ -1,12 +1,10 @@
 extends Node2D
 
-# Scale-aware entity drawing:
-# Scale 0-1: Quantum (flickering dots, quark triplets, nuclei)
-# Scale 2: Atomic (nucleus + electron orbits)
-# Scale 3: Molecular (H2, H2O, benzene)
-# Scale 4: Cellular (cells, organelles, neurons)
-# Scale 5+: Human/Animal (stick figures, detailed humans)
-# Also handles toxic entities and per-type visuals as fallback
+# Scale-aware entity drawing — 18 scales:
+# 0-1: Quantum Foam/Subatomic  2: Atomic  3: Molecular  4: Viral
+# 5: Bacterial  6: Microorganism  7: Insect  8: Small Animal
+# 9: Human  10: Vehicle  11: City  12: Geographic
+# 13: Planetary  14: Stellar  15: Galactic  16-17: Cosmic/Universal
 
 var entity_node: Area2D = null
 var time: float = 0.0
@@ -129,23 +127,23 @@ func _draw() -> void:
 	draw_scale_entity(scale_idx, radius, size_cat, etype, color, center, phase)
 
 func _get_size_category(radius: float, scale_idx: int) -> int:
-	# Categorize entity size relative to scale
-	var thresholds: Array[float] = [12.0, 22.0]  # small < 12, medium < 22, large >= 22
-	match scale_idx:
-		0, 1:
-			thresholds = [8.0, 16.0]
-		2:
-			thresholds = [10.0, 20.0]
-		3:
-			thresholds = [12.0, 24.0]
-		4:
-			thresholds = [15.0, 28.0]
-		_:
-			thresholds = [18.0, 32.0]
-
-	if radius < thresholds[0]:
+	var lo: float = 12.0
+	var hi: float = 22.0
+	if scale_idx <= 1:
+		lo = 8.0; hi = 16.0
+	elif scale_idx == 2:
+		lo = 10.0; hi = 20.0
+	elif scale_idx == 3:
+		lo = 12.0; hi = 24.0
+	elif scale_idx <= 5:
+		lo = 14.0; hi = 26.0
+	elif scale_idx <= 8:
+		lo = 16.0; hi = 30.0
+	else:
+		lo = 18.0; hi = 32.0
+	if radius < lo:
 		return 0
-	elif radius < thresholds[1]:
+	elif radius < hi:
 		return 1
 	else:
 		return 2
@@ -159,12 +157,31 @@ func draw_scale_entity(scale_idx: int, radius: float, size_cat: int, etype: int,
 		3:
 			_draw_molecular(center, radius, size_cat, color, phase)
 		4:
-			_draw_cellular(center, radius, size_cat, color, phase)
+			_draw_viral(center, radius, size_cat, color, phase)
+		5:
+			_draw_bacterial(center, radius, size_cat, color, phase)
+		6:
+			_draw_microorganism(center, radius, size_cat, color, phase)
+		7:
+			_draw_insect(center, radius, size_cat, color, phase)
+		8:
+			_draw_small_animal(center, radius, size_cat, color, phase)
+		9:
+			_draw_human(center, radius, size_cat, color, phase)
+		10:
+			_draw_vehicle(center, radius, size_cat, color, phase)
+		11:
+			_draw_city(center, radius, size_cat, color, phase)
+		12:
+			_draw_geographic(center, radius, size_cat, color, phase)
+		13:
+			_draw_planetary(center, radius, size_cat, color, phase)
+		14:
+			_draw_stellar(center, radius, size_cat, color, phase)
+		15:
+			_draw_galactic(center, radius, size_cat, color, phase)
 		_:
-			if scale_idx >= 5:
-				_draw_human(center, radius, size_cat, color, phase)
-			else:
-				_draw_fallback(center, radius, color, etype, phase)
+			_draw_cosmic(center, radius, size_cat, color, phase)
 
 # ── Scale 0-1: Quantum/Subatomic ────────────────────────────────
 
@@ -368,9 +385,123 @@ func _draw_molecular(center: Vector2, r: float, size_cat: int, color: Color, pha
 			# Inner ring glow (delocalized electrons)
 			draw_arc(center, hex_r * 0.55, 0.0, TAU, 16, Color(color.r, color.g, color.b, 0.15), 1.5)
 
-# ── Scale 4: Cellular ───────────────────────────────────────────
+# ── Scale 4: Viral ──────────────────────────────────────────────
 
-func _draw_cellular(center: Vector2, r: float, size_cat: int, color: Color, phase: float) -> void:
+func _draw_viral(center: Vector2, r: float, size_cat: int, color: Color, phase: float) -> void:
+	var pulse: float = 0.9 + 0.1 * sin(time * 3.0 + phase)
+	match size_cat:
+		0:
+			# Icosahedral shape — hexagon with spike triangles
+			var hex_r: float = r * 0.6
+			var pts: PackedVector2Array = PackedVector2Array()
+			for i in range(6):
+				var a: float = TAU / 6.0 * float(i) - PI / 6.0
+				pts.append(center + Vector2(cos(a), sin(a)) * hex_r)
+			draw_colored_polygon(pts, Color(color.r, color.g, color.b, 0.6 * pulse))
+			# Spike triangles on each edge
+			for i in range(6):
+				var next: int = (i + 1) % 6
+				var mid: Vector2 = (pts[i] + pts[next]) * 0.5
+				var outward: Vector2 = (mid - center).normalized() * r * 0.25
+				var spike: Vector2 = mid + outward
+				draw_line(pts[i], spike, Color(color.r, color.g, color.b, 0.5 * pulse), 1.0)
+				draw_line(spike, pts[next], Color(color.r, color.g, color.b, 0.5 * pulse), 1.0)
+			draw_arc(center, hex_r, 0.0, TAU, 12, Color(color.r, color.g, color.b, 0.3), 1.0)
+		1:
+			# Bacteriophage — hexagon head + tail + leg lines
+			var head_r: float = r * 0.35
+			var head_pts: PackedVector2Array = PackedVector2Array()
+			for i in range(6):
+				var a: float = TAU / 6.0 * float(i) - PI / 6.0
+				head_pts.append(center + Vector2(0, -r * 0.2) + Vector2(cos(a), sin(a)) * head_r)
+			draw_colored_polygon(head_pts, Color(color.r, color.g, color.b, 0.65 * pulse))
+			# Tail
+			var tail_top: Vector2 = center + Vector2(0, -r * 0.2 + head_r)
+			var tail_bot: Vector2 = center + Vector2(0, r * 0.55)
+			draw_line(tail_top, tail_bot, Color(color.r, color.g, color.b, 0.7 * pulse), 2.0)
+			# Legs at bottom
+			for i in range(3):
+				var angle: float = -PI / 3.0 + float(i) * PI / 3.0
+				var leg_end: Vector2 = tail_bot + Vector2(cos(angle + PI * 0.5), sin(angle + PI * 0.5)) * r * 0.3
+				draw_line(tail_bot, leg_end, Color(color.r, color.g, color.b, 0.5 * pulse), 1.5)
+		2, _:
+			# Complex virus — two overlapping pentagons + spike proteins
+			for p in range(2):
+				var rot: float = float(p) * PI / 5.0
+				var pent_r: float = r * 0.5
+				var pts: PackedVector2Array = PackedVector2Array()
+				for i in range(5):
+					var a: float = TAU / 5.0 * float(i) + rot
+					pts.append(center + Vector2(cos(a), sin(a)) * pent_r)
+				draw_colored_polygon(pts, Color(color.r, color.g, color.b, 0.35 * pulse))
+				for i in range(5):
+					draw_line(pts[i], pts[(i + 1) % 5], Color(color.r, color.g, color.b, 0.5), 1.0)
+			# Spike proteins — 8 radiating lines
+			for i in range(8):
+				var a: float = TAU / 8.0 * float(i) + time * 0.3
+				var spike_start: Vector2 = center + Vector2(cos(a), sin(a)) * r * 0.55
+				var spike_end: Vector2 = center + Vector2(cos(a), sin(a)) * r * 0.9
+				draw_line(spike_start, spike_end, Color(color.r, color.g, color.b, 0.6 * pulse), 1.5)
+				draw_circle(spike_end, maxf(r * 0.05, 1.0), Color(color.r, color.g, color.b, 0.5))
+
+# ── Scale 5: Bacterial ─────────────────────────────────────────
+
+func _draw_bacterial(center: Vector2, r: float, size_cat: int, color: Color, phase: float) -> void:
+	match size_cat:
+		0:
+			# Coccus — circle with 1-2 flagellum lines
+			draw_circle(center, r * 0.6, Color(color.r, color.g, color.b, 0.75))
+			draw_circle(center, r * 0.35, Color(color.r * 0.5 + 0.4, color.g * 0.5 + 0.4, color.b * 0.5 + 0.4, 0.4))
+			# Flagellum — sinusoidal polyline
+			var flag_pts: PackedVector2Array = PackedVector2Array()
+			for i in range(10):
+				var t: float = float(i) / 9.0
+				var x: float = r * 0.6 + t * r * 0.5
+				var y: float = sin(t * TAU * 1.5 + time * 4.0 + phase) * r * 0.12
+				flag_pts.append(center + Vector2(x, y))
+			draw_polyline(flag_pts, Color(color.r, color.g, color.b, 0.4), 1.0)
+		1:
+			# Bacillus — rounded rectangle + multiple flagella
+			var hw: float = r * 0.7
+			var hh: float = r * 0.3
+			var body_pts: PackedVector2Array = PackedVector2Array()
+			for i in range(12):
+				var a: float = TAU / 12.0 * float(i)
+				body_pts.append(center + Vector2(cos(a) * hw, sin(a) * hh))
+			draw_colored_polygon(body_pts, Color(color.r, color.g, color.b, 0.7))
+			draw_polyline(body_pts, Color(color.r, color.g, color.b, 0.4), 1.0)
+			# Multiple flagella
+			for f in range(3):
+				var flag_pts: PackedVector2Array = PackedVector2Array()
+				var start_y: float = (float(f) - 1.0) * hh * 0.5
+				for i in range(8):
+					var t: float = float(i) / 7.0
+					var x: float = hw + t * r * 0.5
+					var y: float = start_y + sin(t * TAU * 1.2 + time * 5.0 + phase + float(f)) * r * 0.1
+					flag_pts.append(center + Vector2(x, y))
+				draw_polyline(flag_pts, Color(color.r, color.g, color.b, 0.35), 1.0)
+		2, _:
+			# Spirochete — wavy sinusoidal body
+			var wave_pts: PackedVector2Array = PackedVector2Array()
+			var seg: int = 20
+			for i in range(seg):
+				var t: float = float(i) / float(seg - 1) - 0.5
+				var x: float = t * r * 1.8
+				var y: float = sin(t * TAU * 2.0 + time * 3.0 + phase) * r * 0.3
+				wave_pts.append(center + Vector2(x, y))
+			draw_polyline(wave_pts, Color(color.r, color.g, color.b, 0.8), maxf(r * 0.15, 2.0))
+			# Inner highlight
+			var inner_pts: PackedVector2Array = PackedVector2Array()
+			for i in range(seg):
+				var t: float = float(i) / float(seg - 1) - 0.5
+				var x: float = t * r * 1.8
+				var y: float = sin(t * TAU * 2.0 + time * 3.0 + phase) * r * 0.3
+				inner_pts.append(center + Vector2(x, y))
+			draw_polyline(inner_pts, Color(1.0, 1.0, 1.0, 0.2), maxf(r * 0.06, 1.0))
+
+# ── Scale 6: Microorganism ──────────────────────────────────────
+
+func _draw_microorganism(center: Vector2, r: float, size_cat: int, color: Color, phase: float) -> void:
 	match size_cat:
 		0:
 			# Small cell: membrane + nucleus + 2-3 mitochondria
@@ -463,7 +594,148 @@ func _draw_cellular(center: Vector2, r: float, size_cat: int, color: Color, phas
 				var perp: Vector2 = Vector2(-axon_dir.y, axon_dir.x)
 				draw_line(sheath_pos + perp * r * 0.06, sheath_pos - perp * r * 0.06, Color(0.8, 0.8, 0.3, 0.3), 2.5)
 
-# ── Scale 5+: Human/Animal ──────────────────────────────────────
+# ── Scale 7: Insect ─────────────────────────────────────────────
+
+func _draw_insect(center: Vector2, r: float, size_cat: int, color: Color, phase: float) -> void:
+	var walk: float = sin(time * 5.0 + phase) * 0.15
+	match size_cat:
+		0:
+			# Ant — 3 body circles + 6 legs + 2 antennae
+			var head_p: Vector2 = center + Vector2(0, -r * 0.4)
+			var thorax_p: Vector2 = center + Vector2(0, -r * 0.1)
+			var abdomen_p: Vector2 = center + Vector2(0, r * 0.25)
+			draw_circle(head_p, r * 0.2, Color(color.r, color.g, color.b, 0.85))
+			draw_circle(thorax_p, r * 0.25, Color(color.r, color.g, color.b, 0.8))
+			draw_circle(abdomen_p, r * 0.35, Color(color.r, color.g, color.b, 0.75))
+			# Legs — 3 pairs from thorax
+			for i in range(3):
+				var ly: float = -r * 0.2 + float(i) * r * 0.15
+				var lw: float = walk * (1.0 if i % 2 == 0 else -1.0)
+				draw_line(center + Vector2(0, ly), center + Vector2(-r * 0.5, ly + r * 0.15 + lw * r * 0.1), Color(color.r, color.g, color.b, 0.6), 1.0)
+				draw_line(center + Vector2(0, ly), center + Vector2(r * 0.5, ly + r * 0.15 - lw * r * 0.1), Color(color.r, color.g, color.b, 0.6), 1.0)
+			# Antennae
+			draw_line(head_p, head_p + Vector2(-r * 0.25, -r * 0.3), Color(color.r, color.g, color.b, 0.5), 1.0)
+			draw_line(head_p, head_p + Vector2(r * 0.25, -r * 0.3), Color(color.r, color.g, color.b, 0.5), 1.0)
+		1:
+			# Beetle — oval body + wing line + 6 legs + head
+			var body_pts: PackedVector2Array = PackedVector2Array()
+			for i in range(16):
+				var a: float = TAU / 16.0 * float(i)
+				body_pts.append(center + Vector2(cos(a) * r * 0.45, sin(a) * r * 0.65))
+			draw_colored_polygon(body_pts, Color(color.r, color.g, color.b, 0.75))
+			# Wing line down center
+			draw_line(center + Vector2(0, -r * 0.5), center + Vector2(0, r * 0.55), Color(color.r * 0.3, color.g * 0.3, color.b * 0.3, 0.5), 1.5)
+			# Head
+			draw_circle(center + Vector2(0, -r * 0.6), r * 0.18, Color(color.r * 0.7, color.g * 0.7, color.b * 0.7, 0.85))
+			# 6 legs
+			for i in range(3):
+				var ly: float = -r * 0.3 + float(i) * r * 0.3
+				var lw: float = walk * (1.0 if i % 2 == 0 else -1.0)
+				draw_line(center + Vector2(-r * 0.4, ly), center + Vector2(-r * 0.75, ly + r * 0.15 + lw * r * 0.08), Color(color.r, color.g, color.b, 0.5), 1.5)
+				draw_line(center + Vector2(r * 0.4, ly), center + Vector2(r * 0.75, ly + r * 0.15 - lw * r * 0.08), Color(color.r, color.g, color.b, 0.5), 1.5)
+		2, _:
+			# Bee — striped body + wings + stinger + antennae
+			var body_pts: PackedVector2Array = PackedVector2Array()
+			for i in range(16):
+				var a: float = TAU / 16.0 * float(i)
+				body_pts.append(center + Vector2(cos(a) * r * 0.4, sin(a) * r * 0.6))
+			draw_colored_polygon(body_pts, Color(1.0, 0.85, 0.2, 0.75))
+			# Black stripes
+			for s in range(3):
+				var sy: float = -r * 0.3 + float(s) * r * 0.3
+				draw_line(center + Vector2(-r * 0.38, sy), center + Vector2(r * 0.38, sy), Color(0.1, 0.1, 0.1, 0.6), maxf(r * 0.1, 2.0))
+			# Wings (triangles)
+			var wing_l: PackedVector2Array = PackedVector2Array([
+				center + Vector2(-r * 0.35, -r * 0.1),
+				center + Vector2(-r * 0.85, -r * 0.45),
+				center + Vector2(-r * 0.3, -r * 0.4),
+			])
+			var wing_r: PackedVector2Array = PackedVector2Array([
+				center + Vector2(r * 0.35, -r * 0.1),
+				center + Vector2(r * 0.85, -r * 0.45),
+				center + Vector2(r * 0.3, -r * 0.4),
+			])
+			draw_colored_polygon(wing_l, Color(0.8, 0.9, 1.0, 0.3))
+			draw_colored_polygon(wing_r, Color(0.8, 0.9, 1.0, 0.3))
+			# Stinger
+			draw_line(center + Vector2(0, r * 0.6), center + Vector2(0, r * 0.85), Color(0.2, 0.2, 0.2, 0.7), 1.5)
+			# Head + antennae
+			draw_circle(center + Vector2(0, -r * 0.55), r * 0.18, Color(0.2, 0.15, 0.05, 0.85))
+			draw_line(center + Vector2(0, -r * 0.65), center + Vector2(-r * 0.2, -r * 0.85), Color(0.2, 0.15, 0.05, 0.5), 1.0)
+			draw_line(center + Vector2(0, -r * 0.65), center + Vector2(r * 0.2, -r * 0.85), Color(0.2, 0.15, 0.05, 0.5), 1.0)
+
+# ── Scale 8: Small Animal ──────────────────────────────────────
+
+func _draw_small_animal(center: Vector2, r: float, size_cat: int, color: Color, phase: float) -> void:
+	var swim: float = sin(time * 3.0 + phase) * 0.2
+	match size_cat:
+		0:
+			# Fish — triangle body + tail + eye
+			var body: PackedVector2Array = PackedVector2Array([
+				center + Vector2(-r * 0.7, 0),
+				center + Vector2(r * 0.4, -r * 0.3),
+				center + Vector2(r * 0.4, r * 0.3),
+			])
+			draw_colored_polygon(body, Color(color.r, color.g, color.b, 0.75))
+			# Tail
+			draw_line(center + Vector2(r * 0.4, 0), center + Vector2(r * 0.75, -r * 0.25 + swim * r * 0.15), Color(color.r, color.g, color.b, 0.6), 1.5)
+			draw_line(center + Vector2(r * 0.4, 0), center + Vector2(r * 0.75, r * 0.25 + swim * r * 0.15), Color(color.r, color.g, color.b, 0.6), 1.5)
+			# Eye
+			draw_circle(center + Vector2(-r * 0.35, -r * 0.05), maxf(r * 0.08, 1.5), Color(1.0, 1.0, 1.0, 0.9))
+			draw_circle(center + Vector2(-r * 0.35, -r * 0.05), maxf(r * 0.04, 1.0), Color(0.0, 0.0, 0.0, 0.9))
+		1:
+			# Frog — round body + 4 bent limbs + 2 big eyes
+			draw_circle(center, r * 0.5, Color(color.r, color.g, color.b, 0.7))
+			draw_circle(center, r * 0.3, Color(color.r * 0.5 + 0.3, color.g * 0.5 + 0.3, color.b * 0.5 + 0.3, 0.4))
+			# Big eyes on top
+			var eye_l: Vector2 = center + Vector2(-r * 0.25, -r * 0.45)
+			var eye_r_pos: Vector2 = center + Vector2(r * 0.25, -r * 0.45)
+			draw_circle(eye_l, r * 0.15, Color(1.0, 1.0, 1.0, 0.9))
+			draw_circle(eye_r_pos, r * 0.15, Color(1.0, 1.0, 1.0, 0.9))
+			draw_circle(eye_l, r * 0.07, Color(0.0, 0.0, 0.0, 0.9))
+			draw_circle(eye_r_pos, r * 0.07, Color(0.0, 0.0, 0.0, 0.9))
+			# 4 bent limbs (L-shaped)
+			var lw: float = maxf(r * 0.05, 1.0)
+			# Front legs
+			draw_line(center + Vector2(-r * 0.4, -r * 0.1), center + Vector2(-r * 0.7, 0), Color(color.r, color.g, color.b, 0.6), lw)
+			draw_line(center + Vector2(-r * 0.7, 0), center + Vector2(-r * 0.75, r * 0.2 + swim * r * 0.1), Color(color.r, color.g, color.b, 0.6), lw)
+			draw_line(center + Vector2(r * 0.4, -r * 0.1), center + Vector2(r * 0.7, 0), Color(color.r, color.g, color.b, 0.6), lw)
+			draw_line(center + Vector2(r * 0.7, 0), center + Vector2(r * 0.75, r * 0.2 - swim * r * 0.1), Color(color.r, color.g, color.b, 0.6), lw)
+			# Back legs
+			draw_line(center + Vector2(-r * 0.35, r * 0.3), center + Vector2(-r * 0.65, r * 0.55), Color(color.r, color.g, color.b, 0.6), lw)
+			draw_line(center + Vector2(-r * 0.65, r * 0.55), center + Vector2(-r * 0.5, r * 0.75 + swim * r * 0.1), Color(color.r, color.g, color.b, 0.6), lw)
+			draw_line(center + Vector2(r * 0.35, r * 0.3), center + Vector2(r * 0.65, r * 0.55), Color(color.r, color.g, color.b, 0.6), lw)
+			draw_line(center + Vector2(r * 0.65, r * 0.55), center + Vector2(r * 0.5, r * 0.75 - swim * r * 0.1), Color(color.r, color.g, color.b, 0.6), lw)
+		2, _:
+			# Bird — oval body + wings + head + beak + tail
+			# Body oval
+			var body_pts: PackedVector2Array = PackedVector2Array()
+			for i in range(16):
+				var a: float = TAU / 16.0 * float(i)
+				body_pts.append(center + Vector2(cos(a) * r * 0.45, sin(a) * r * 0.3))
+			draw_colored_polygon(body_pts, Color(color.r, color.g, color.b, 0.7))
+			# Head
+			var head_p: Vector2 = center + Vector2(-r * 0.5, -r * 0.15)
+			draw_circle(head_p, r * 0.18, Color(color.r, color.g, color.b, 0.8))
+			# Eye
+			draw_circle(head_p + Vector2(-r * 0.06, -r * 0.04), maxf(r * 0.04, 1.0), Color(0.0, 0.0, 0.0, 0.9))
+			# Beak
+			var beak: PackedVector2Array = PackedVector2Array([
+				head_p + Vector2(-r * 0.15, -r * 0.03),
+				head_p + Vector2(-r * 0.35, r * 0.02),
+				head_p + Vector2(-r * 0.15, r * 0.05),
+			])
+			draw_colored_polygon(beak, Color(1.0, 0.7, 0.2, 0.85))
+			# Wings (arcs)
+			var wing_flap: float = sin(time * 6.0 + phase) * 0.3
+			draw_arc(center + Vector2(0, -r * 0.15), r * 0.5, -PI * 0.7 + wing_flap, -PI * 0.2 + wing_flap, 8, Color(color.r * 0.8, color.g * 0.8, color.b * 0.8, 0.6), 2.0)
+			draw_arc(center + Vector2(0, -r * 0.15), r * 0.45, -PI * 0.7 + wing_flap, -PI * 0.2 + wing_flap, 8, Color(color.r, color.g, color.b, 0.3), 1.5)
+			# Tail
+			draw_line(center + Vector2(r * 0.4, 0), center + Vector2(r * 0.75, -r * 0.2), Color(color.r, color.g, color.b, 0.5), 1.5)
+			draw_line(center + Vector2(r * 0.4, 0), center + Vector2(r * 0.8, 0), Color(color.r, color.g, color.b, 0.5), 1.5)
+			draw_line(center + Vector2(r * 0.4, 0), center + Vector2(r * 0.75, r * 0.15), Color(color.r, color.g, color.b, 0.5), 1.5)
+
+# ── Scale 9: Human ──────────────────────────────────────────────
 
 func _draw_human(center: Vector2, r: float, size_cat: int, color: Color, phase: float) -> void:
 	var body_color: Color = Color(color.r * 0.6 + 0.3, color.g * 0.6 + 0.3, color.b * 0.6 + 0.3, 0.85)
@@ -580,6 +852,343 @@ func _draw_human(center: Vector2, r: float, size_cat: int, color: Color, phase: 
 			draw_line(knee_l, foot_l, body_color, limb_width * 1.2)
 			draw_line(hip_r, knee_r, body_color, limb_width * 1.5)
 			draw_line(knee_r, foot_r, body_color, limb_width * 1.2)
+
+# ── Scale 10: Vehicle/Structure ─────────────────────────────────
+
+func _draw_vehicle(center: Vector2, r: float, size_cat: int, color: Color, _phase: float) -> void:
+	match size_cat:
+		0:
+			# Car — rectangle body + 4 wheels + windshield
+			var hw: float = r * 0.65
+			var hh: float = r * 0.3
+			var body: PackedVector2Array = PackedVector2Array([
+				center + Vector2(-hw, -hh), center + Vector2(hw, -hh),
+				center + Vector2(hw, hh), center + Vector2(-hw, hh),
+			])
+			draw_colored_polygon(body, Color(color.r, color.g, color.b, 0.7))
+			# Windshield
+			draw_line(center + Vector2(-hw * 0.2, -hh), center + Vector2(hw * 0.1, -hh), Color(0.6, 0.8, 1.0, 0.5), 2.0)
+			# Wheels
+			var wheel_r: float = maxf(r * 0.12, 2.0)
+			draw_circle(center + Vector2(-hw * 0.6, hh), wheel_r, Color(0.15, 0.15, 0.15, 0.9))
+			draw_circle(center + Vector2(hw * 0.6, hh), wheel_r, Color(0.15, 0.15, 0.15, 0.9))
+			draw_circle(center + Vector2(-hw * 0.6, -hh), wheel_r, Color(0.15, 0.15, 0.15, 0.9))
+			draw_circle(center + Vector2(hw * 0.6, -hh), wheel_r, Color(0.15, 0.15, 0.15, 0.9))
+		1:
+			# Bus — longer rectangle + 6 wheels + windows
+			var hw: float = r * 0.8
+			var hh: float = r * 0.3
+			var body: PackedVector2Array = PackedVector2Array([
+				center + Vector2(-hw, -hh), center + Vector2(hw, -hh),
+				center + Vector2(hw, hh), center + Vector2(-hw, hh),
+			])
+			draw_colored_polygon(body, Color(color.r, color.g, color.b, 0.7))
+			# Windows
+			for i in range(5):
+				var wx: float = -hw * 0.7 + float(i) * hw * 0.35
+				draw_circle(center + Vector2(wx, -hh * 0.3), maxf(r * 0.06, 1.5), Color(0.6, 0.8, 1.0, 0.6))
+			# 6 wheels
+			var wr: float = maxf(r * 0.1, 2.0)
+			for i in range(3):
+				var wx: float = -hw * 0.65 + float(i) * hw * 0.65
+				draw_circle(center + Vector2(wx, hh), wr, Color(0.15, 0.15, 0.15, 0.9))
+				draw_circle(center + Vector2(wx, -hh), wr, Color(0.15, 0.15, 0.15, 0.9))
+		2, _:
+			# Building — tall rectangle + window grid + door
+			var hw: float = r * 0.4
+			var hh: float = r * 0.85
+			var body: PackedVector2Array = PackedVector2Array([
+				center + Vector2(-hw, -hh), center + Vector2(hw, -hh),
+				center + Vector2(hw, hh), center + Vector2(-hw, hh),
+			])
+			draw_colored_polygon(body, Color(color.r * 0.5 + 0.25, color.g * 0.5 + 0.25, color.b * 0.5 + 0.25, 0.7))
+			draw_polyline(PackedVector2Array([
+				center + Vector2(-hw, -hh), center + Vector2(hw, -hh),
+				center + Vector2(hw, hh), center + Vector2(-hw, hh), center + Vector2(-hw, -hh),
+			]), Color(color.r, color.g, color.b, 0.5), 1.0)
+			# Window grid
+			for row in range(4):
+				for col in range(3):
+					var wx: float = -hw * 0.6 + float(col) * hw * 0.6
+					var wy: float = -hh * 0.8 + float(row) * hh * 0.4
+					draw_circle(center + Vector2(wx, wy), maxf(r * 0.04, 1.0), Color(1.0, 1.0, 0.7, 0.6))
+			# Door
+			var door: PackedVector2Array = PackedVector2Array([
+				center + Vector2(-hw * 0.25, hh * 0.5),
+				center + Vector2(hw * 0.25, hh * 0.5),
+				center + Vector2(hw * 0.25, hh),
+				center + Vector2(-hw * 0.25, hh),
+			])
+			draw_colored_polygon(door, Color(0.3, 0.2, 0.15, 0.7))
+
+# ── Scale 11: City ─────────────────────────────────────────────
+
+func _draw_city(center: Vector2, r: float, size_cat: int, color: Color, _phase: float) -> void:
+	match size_cat:
+		0:
+			# City block — cluster of small rectangles
+			for i in range(5):
+				var bx: float = (randf_range(-0.5, 0.5) if i > 0 else 0.0)  # deterministic via index
+				bx = (float(i) - 2.0) * r * 0.25
+				var by: float = (float(i % 3) - 1.0) * r * 0.2
+				var bw: float = r * 0.15
+				var bh: float = r * (0.15 + float(i % 3) * 0.1)
+				var rect: PackedVector2Array = PackedVector2Array([
+					center + Vector2(bx - bw, by - bh),
+					center + Vector2(bx + bw, by - bh),
+					center + Vector2(bx + bw, by + bh),
+					center + Vector2(bx - bw, by + bh),
+				])
+				draw_colored_polygon(rect, Color(color.r * 0.4 + 0.2, color.g * 0.4 + 0.2, color.b * 0.4 + 0.2, 0.6))
+		1:
+			# Stadium — large oval + inner oval + seating lines
+			draw_arc(center, r * 0.75, 0.0, TAU, 24, Color(color.r, color.g, color.b, 0.6), 2.0)
+			draw_arc(center, r * 0.5, 0.0, TAU, 20, Color(color.r, color.g, color.b, 0.4), 1.5)
+			draw_arc(center, r * 0.62, 0.0, TAU, 20, Color(color.r, color.g, color.b, 0.2), 1.0)
+			# Seating lines
+			for i in range(8):
+				var a: float = TAU / 8.0 * float(i)
+				draw_line(center + Vector2(cos(a), sin(a)) * r * 0.5, center + Vector2(cos(a), sin(a)) * r * 0.75, Color(color.r, color.g, color.b, 0.3), 1.0)
+		2, _:
+			# Airport — terminal rectangle + 2 runway lines
+			var tw: float = r * 0.5
+			var th: float = r * 0.25
+			var terminal: PackedVector2Array = PackedVector2Array([
+				center + Vector2(-tw, -th), center + Vector2(tw, -th),
+				center + Vector2(tw, th), center + Vector2(-tw, th),
+			])
+			draw_colored_polygon(terminal, Color(color.r * 0.4 + 0.3, color.g * 0.4 + 0.3, color.b * 0.4 + 0.3, 0.6))
+			# Runways
+			draw_line(center + Vector2(-tw, 0), center + Vector2(-r * 0.9, -r * 0.5), Color(0.4, 0.4, 0.4, 0.7), 3.0)
+			draw_line(center + Vector2(tw, 0), center + Vector2(r * 0.9, -r * 0.4), Color(0.4, 0.4, 0.4, 0.7), 3.0)
+			# Runway markings
+			for i in range(4):
+				var t: float = float(i + 1) / 5.0
+				var p1: Vector2 = center + Vector2(-tw, 0).lerp(Vector2(-r * 0.9, -r * 0.5), t)
+				draw_circle(p1, maxf(r * 0.02, 1.0), Color(1.0, 1.0, 1.0, 0.5))
+
+# ── Scale 12: Geographic ───────────────────────────────────────
+
+func _draw_geographic(center: Vector2, r: float, size_cat: int, color: Color, phase: float) -> void:
+	match size_cat:
+		0:
+			# Island — irregular polygon
+			var pts: PackedVector2Array = PackedVector2Array()
+			for i in range(6):
+				var a: float = TAU / 6.0 * float(i) + phase * 0.1
+				var dist: float = r * (0.5 + 0.2 * sin(float(i) * 2.3 + phase))
+				pts.append(center + Vector2(cos(a), sin(a)) * dist)
+			draw_colored_polygon(pts, Color(0.2, 0.6, 0.25, 0.7))
+			# Beach outline
+			draw_polyline(pts, Color(0.9, 0.85, 0.6, 0.5), 1.5)
+			# Close the polyline
+			draw_line(pts[pts.size() - 1], pts[0], Color(0.9, 0.85, 0.6, 0.5), 1.5)
+		1:
+			# Mountain range — jagged skyline + snow caps
+			var pts: PackedVector2Array = PackedVector2Array()
+			pts.append(center + Vector2(-r * 0.9, r * 0.4))
+			var peaks: int = 5
+			for i in range(peaks):
+				var x: float = -r * 0.8 + float(i) * r * 0.4
+				var h: float = r * (0.3 + 0.3 * sin(float(i) * 1.7 + phase))
+				pts.append(center + Vector2(x, -h))
+				if i < peaks - 1:
+					pts.append(center + Vector2(x + r * 0.2, -h * 0.3))
+			pts.append(center + Vector2(r * 0.9, r * 0.4))
+			draw_polyline(pts, Color(color.r, color.g, color.b, 0.7), 2.0)
+			# Snow caps
+			for i in range(peaks):
+				var x: float = -r * 0.8 + float(i) * r * 0.4
+				var h: float = r * (0.3 + 0.3 * sin(float(i) * 1.7 + phase))
+				var peak_p: Vector2 = center + Vector2(x, -h)
+				var snow: PackedVector2Array = PackedVector2Array([
+					peak_p,
+					peak_p + Vector2(-r * 0.08, r * 0.1),
+					peak_p + Vector2(r * 0.08, r * 0.1),
+				])
+				draw_colored_polygon(snow, Color(1.0, 1.0, 1.0, 0.6))
+		2, _:
+			# Continent — large irregular polygon + rivers
+			var pts: PackedVector2Array = PackedVector2Array()
+			for i in range(10):
+				var a: float = TAU / 10.0 * float(i) + phase * 0.05
+				var dist: float = r * (0.6 + 0.25 * sin(float(i) * 1.9 + phase * 0.3))
+				pts.append(center + Vector2(cos(a), sin(a)) * dist)
+			draw_colored_polygon(pts, Color(0.2, 0.55, 0.2, 0.65))
+			draw_polyline(pts, Color(0.15, 0.4, 0.15, 0.5), 1.5)
+			draw_line(pts[pts.size() - 1], pts[0], Color(0.15, 0.4, 0.15, 0.5), 1.5)
+			# Rivers
+			var river_pts: PackedVector2Array = PackedVector2Array()
+			for i in range(6):
+				var t: float = float(i) / 5.0
+				var x: float = lerpf(-r * 0.3, r * 0.4, t)
+				var y: float = lerpf(-r * 0.2, r * 0.3, t) + sin(t * TAU + phase) * r * 0.1
+				river_pts.append(center + Vector2(x, y))
+			draw_polyline(river_pts, Color(0.2, 0.4, 0.9, 0.5), 1.5)
+
+# ── Scale 13: Planetary ────────────────────────────────────────
+
+func _draw_planetary(center: Vector2, r: float, size_cat: int, color: Color, phase: float) -> void:
+	match size_cat:
+		0:
+			# Moon — gray circle + craters
+			draw_circle(center, r * 0.7, Color(0.6, 0.6, 0.6, 0.75))
+			draw_circle(center, r * 0.4, Color(0.7, 0.7, 0.7, 0.3))
+			# Craters
+			for i in range(4):
+				var a: float = float(i) * 1.8 + phase
+				var d: float = r * (0.2 + float(i % 3) * 0.12)
+				var cp: Vector2 = center + Vector2(cos(a), sin(a)) * d
+				draw_arc(cp, maxf(r * 0.08, 1.5), 0.0, TAU, 8, Color(0.4, 0.4, 0.4, 0.5), 1.0)
+		1:
+			# Rocky planet — circle + crack lines + atmosphere
+			draw_circle(center, r * 0.65, Color(color.r * 0.6 + 0.2, color.g * 0.5 + 0.15, color.b * 0.4 + 0.1, 0.8))
+			draw_circle(center, r * 0.4, Color(color.r * 0.4 + 0.3, color.g * 0.4 + 0.25, color.b * 0.3 + 0.15, 0.4))
+			# Surface cracks
+			for i in range(3):
+				var a: float = float(i) * 2.1 + phase
+				var p1: Vector2 = center + Vector2(cos(a), sin(a)) * r * 0.15
+				var p2: Vector2 = center + Vector2(cos(a + 0.5), sin(a + 0.5)) * r * 0.55
+				draw_line(p1, p2, Color(0.3, 0.2, 0.15, 0.4), 1.0)
+			# Thin atmosphere
+			draw_arc(center, r * 0.72, 0.0, TAU, 24, Color(0.5, 0.7, 1.0, 0.15), 2.0)
+		2, _:
+			# Gas giant — circle + bands + orbiting moons
+			draw_circle(center, r * 0.6, Color(color.r, color.g, color.b, 0.7))
+			# Horizontal band arcs
+			for i in range(3):
+				var y_off: float = (float(i) - 1.0) * r * 0.2
+				var band_r: float = r * 0.58 * cos(asin(clampf(y_off / (r * 0.6), -1.0, 1.0)))
+				if band_r > 0:
+					draw_line(center + Vector2(-band_r, y_off), center + Vector2(band_r, y_off), Color(color.r * 0.7, color.g * 0.7, color.b * 0.5, 0.4), maxf(r * 0.06, 1.5))
+			# Orbiting moons
+			for i in range(2):
+				var moon_a: float = time * (0.8 + float(i) * 0.3) + float(i) * PI + phase
+				var moon_d: float = r * (0.8 + float(i) * 0.15)
+				var moon_p: Vector2 = center + Vector2(cos(moon_a), sin(moon_a) * 0.3) * moon_d
+				draw_circle(moon_p, maxf(r * 0.07, 1.5), Color(0.7, 0.7, 0.7, 0.7))
+
+# ── Scale 14: Stellar ──────────────────────────────────────────
+
+func _draw_stellar(center: Vector2, r: float, size_cat: int, color: Color, phase: float) -> void:
+	var glow_pulse: float = 0.85 + 0.15 * sin(time * 2.0 + phase)
+	match size_cat:
+		0:
+			# Red dwarf — small dim reddish circle + soft glow
+			draw_circle(center, r * 0.8, Color(0.9, 0.2, 0.1, 0.12 * glow_pulse))
+			draw_circle(center, r * 0.5, Color(0.9, 0.25, 0.1, 0.25 * glow_pulse))
+			draw_circle(center, r * 0.3, Color(1.0, 0.35, 0.15, 0.7 * glow_pulse))
+			draw_circle(center, r * 0.15, Color(1.0, 0.6, 0.4, 0.5))
+		1:
+			# Yellow star — circle + 8 flare lines + corona
+			draw_circle(center, r * 0.7, Color(1.0, 0.95, 0.4, 0.1 * glow_pulse))
+			draw_circle(center, r * 0.45, Color(1.0, 0.9, 0.3, 0.4 * glow_pulse))
+			draw_circle(center, r * 0.3, Color(1.0, 1.0, 0.7, 0.8 * glow_pulse))
+			# 8 flare lines
+			for i in range(8):
+				var a: float = TAU / 8.0 * float(i) + time * 0.2
+				var flare_start: Vector2 = center + Vector2(cos(a), sin(a)) * r * 0.35
+				var flare_end: Vector2 = center + Vector2(cos(a), sin(a)) * r * 0.85
+				draw_line(flare_start, flare_end, Color(1.0, 0.9, 0.3, 0.3 * glow_pulse), 1.5)
+			# Corona arc
+			draw_arc(center, r * 0.55, 0.0, TAU, 20, Color(1.0, 0.85, 0.2, 0.15), 1.5)
+		2, _:
+			# Blue supergiant — large bright circle + 12 flares + solar wind
+			draw_circle(center, r * 0.9, Color(0.5, 0.6, 1.0, 0.08 * glow_pulse))
+			draw_circle(center, r * 0.6, Color(0.6, 0.7, 1.0, 0.25 * glow_pulse))
+			draw_circle(center, r * 0.4, Color(0.7, 0.8, 1.0, 0.7 * glow_pulse))
+			draw_circle(center, r * 0.25, Color(0.9, 0.95, 1.0, 0.9))
+			# 12 flare lines
+			for i in range(12):
+				var a: float = TAU / 12.0 * float(i) + time * 0.15
+				var len_mult: float = 0.7 + 0.3 * sin(float(i) * 2.3 + time)
+				var flare_start: Vector2 = center + Vector2(cos(a), sin(a)) * r * 0.42
+				var flare_end: Vector2 = center + Vector2(cos(a), sin(a)) * r * len_mult
+				draw_line(flare_start, flare_end, Color(0.6, 0.7, 1.0, 0.35 * glow_pulse), 2.0)
+			# Solar wind arcs
+			for i in range(3):
+				var arc_start: float = float(i) * TAU / 3.0 + time * 0.3
+				draw_arc(center, r * 0.75, arc_start, arc_start + PI * 0.4, 8, Color(0.5, 0.6, 1.0, 0.12), 1.5)
+
+# ── Scale 15: Galactic ─────────────────────────────────────────
+
+func _draw_galactic(center: Vector2, r: float, size_cat: int, color: Color, phase: float) -> void:
+	match size_cat:
+		0:
+			# Star cluster — 15-20 tiny dots
+			for i in range(18):
+				var a: float = float(i) * 2.39996 + phase  # golden angle
+				var d: float = r * 0.15 + r * 0.5 * (float(i) / 18.0)
+				var p: Vector2 = center + Vector2(cos(a), sin(a)) * d
+				var brightness: float = 0.4 + 0.5 * sin(float(i) * 1.7 + time * 2.0)
+				draw_circle(p, maxf(r * 0.04, 1.0), Color(1.0, 1.0, 0.9, brightness * 0.8))
+		1:
+			# Nebula — large semi-transparent irregular polygon
+			var pts: PackedVector2Array = PackedVector2Array()
+			for i in range(12):
+				var a: float = TAU / 12.0 * float(i) + phase * 0.1
+				var d: float = r * (0.5 + 0.3 * sin(float(i) * 1.5 + phase))
+				pts.append(center + Vector2(cos(a), sin(a)) * d)
+			draw_colored_polygon(pts, Color(color.r, color.g, color.b, 0.15))
+			# Inner glow layers
+			var inner_pts: PackedVector2Array = PackedVector2Array()
+			for i in range(8):
+				var a: float = TAU / 8.0 * float(i) + phase * 0.2
+				var d: float = r * (0.25 + 0.15 * sin(float(i) * 2.0 + phase))
+				inner_pts.append(center + Vector2(cos(a), sin(a)) * d)
+			draw_colored_polygon(inner_pts, Color(color.r * 0.5 + 0.5, color.g * 0.5 + 0.5, color.b * 0.5 + 0.5, 0.12))
+			# Embedded stars
+			for i in range(6):
+				var a: float = float(i) * 1.1 + phase
+				var d: float = r * 0.3 * sin(float(i) * 0.7)
+				draw_circle(center + Vector2(cos(a), sin(a)) * absf(d), maxf(r * 0.03, 1.0), Color(1.0, 1.0, 1.0, 0.5))
+		2, _:
+			# Spiral galaxy — center + 2 arms + scattered stars
+			# Core
+			draw_circle(center, r * 0.2, Color(1.0, 0.95, 0.7, 0.6))
+			draw_circle(center, r * 0.35, Color(1.0, 0.9, 0.6, 0.15))
+			# Spiral arms
+			for arm in range(2):
+				var arm_pts: PackedVector2Array = PackedVector2Array()
+				var base_a: float = float(arm) * PI + time * 0.1
+				for i in range(20):
+					var t: float = float(i) / 19.0
+					var spiral_a: float = base_a + t * TAU * 0.8
+					var spiral_r: float = r * (0.15 + t * 0.65)
+					arm_pts.append(center + Vector2(cos(spiral_a), sin(spiral_a)) * spiral_r)
+				draw_polyline(arm_pts, Color(color.r, color.g, color.b, 0.35), maxf(r * 0.06, 1.5))
+			# Scattered star dots
+			for i in range(12):
+				var a: float = float(i) * 2.39996 + phase
+				var d: float = r * (0.2 + 0.55 * (float(i) / 12.0))
+				var sp: Vector2 = center + Vector2(cos(a + time * 0.05), sin(a + time * 0.05)) * d
+				draw_circle(sp, maxf(r * 0.025, 1.0), Color(1.0, 1.0, 0.95, 0.4))
+
+# ── Scale 16-17: Cosmic/Universal ──────────────────────────────
+
+func _draw_cosmic(center: Vector2, r: float, size_cat: int, color: Color, phase: float) -> void:
+	# Cosmic filament — bright line with node circles
+	var node_count: int = 5 + size_cat * 3
+	var filament_pts: PackedVector2Array = PackedVector2Array()
+	for i in range(node_count):
+		var t: float = float(i) / float(node_count - 1) - 0.5
+		var x: float = t * r * 2.0
+		var y: float = sin(t * PI * 2.0 + phase * 0.5) * r * 0.35 + cos(t * PI * 3.0 + time * 0.5) * r * 0.15
+		filament_pts.append(center + Vector2(x, y))
+	# Filament glow
+	draw_polyline(filament_pts, Color(color.r, color.g, color.b, 0.12), maxf(r * 0.15, 3.0))
+	draw_polyline(filament_pts, Color(color.r, color.g, color.b, 0.35), maxf(r * 0.06, 1.5))
+	# Node circles
+	for i in range(node_count):
+		var node_r: float = maxf(r * (0.04 + 0.03 * sin(float(i) * 1.5)), 1.5)
+		draw_circle(filament_pts[i], node_r, Color(color.r, color.g, color.b, 0.55))
+		draw_circle(filament_pts[i], node_r * 2.0, Color(color.r, color.g, color.b, 0.1))
+	# Scattered distant galaxy dots
+	for i in range(8):
+		var a: float = float(i) * 2.39996 + phase
+		var d: float = r * 0.6 * (0.3 + 0.7 * (float(i) / 8.0))
+		var brightness: float = 0.15 + 0.15 * sin(time * 1.5 + float(i) * 2.0)
+		draw_circle(center + Vector2(cos(a), sin(a)) * d, maxf(r * 0.02, 1.0), Color(1.0, 1.0, 1.0, brightness))
 
 # ── Toxic entity ────────────────────────────────────────────────
 

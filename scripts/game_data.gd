@@ -6,7 +6,7 @@ signal scale_changed(new_scale_index: int)
 signal hp_changed(new_hp: int)
 
 # Current run state
-var current_scale: int = 0  # 0=Subatomic, 1=Atomic, 2=Molecular, 3=Cellular, 4=Planetary
+var current_scale: int = 0  # 0=Quantum Foam .. 17=Universal
 var player_mass: float = 10.0
 var deaths_this_session: int = 0
 var run_start_time: float = 0.0
@@ -20,22 +20,73 @@ var max_hp: int = 3
 const MAX_HP_CAP: int = 5
 const START_HP: int = 3
 
-# Scale definitions — 5 scales of reality
-const SCALE_NAMES: Array[String] = ["Subatomic", "Atomic", "Molecular", "Cellular", "Planetary"]
-const SCALE_DISPLAY: Array[String] = [
-	"SCALE 1: SUBATOMIC",
-	"SCALE 2: ATOMIC",
-	"SCALE 3: MOLECULAR",
-	"SCALE 4: CELLULAR",
-	"SCALE 5: PLANETARY",
+# Scale definitions — 18 scales of reality
+const SCALE_NAMES: Array[String] = [
+	"Quantum Foam", "Subatomic", "Atomic", "Molecular",
+	"Viral", "Bacterial", "Microorganism", "Insect",
+	"Small Animal", "Human", "Vehicle", "City",
+	"Geographic", "Planetary", "Stellar", "Galactic",
+	"Cosmic", "Universal",
 ]
-const SCALE_THRESHOLDS: Array[float] = [350.0, 1225.0, 4500.0, 15000.0, 9999999.0]
+const SCALE_DISPLAY: Array[String] = [
+	"SCALE 1: QUANTUM FOAM",
+	"SCALE 2: SUBATOMIC",
+	"SCALE 3: ATOMIC",
+	"SCALE 4: MOLECULAR",
+	"SCALE 5: VIRAL",
+	"SCALE 6: BACTERIAL",
+	"SCALE 7: MICROORGANISM",
+	"SCALE 8: INSECT",
+	"SCALE 9: SMALL ANIMAL",
+	"SCALE 10: HUMAN",
+	"SCALE 11: VEHICLE",
+	"SCALE 12: CITY",
+	"SCALE 13: GEOGRAPHIC",
+	"SCALE 14: PLANETARY",
+	"SCALE 15: STELLAR",
+	"SCALE 16: GALACTIC",
+	"SCALE 17: COSMIC",
+	"SCALE 18: UNIVERSAL",
+]
+const SCALE_THRESHOLDS: Array[float] = [
+	200.0,        # 0  Quantum Foam -> Subatomic
+	500.0,        # 1  Subatomic -> Atomic
+	1200.0,       # 2  Atomic -> Molecular
+	3000.0,       # 3  Molecular -> Viral
+	7000.0,       # 4  Viral -> Bacterial
+	15000.0,      # 5  Bacterial -> Microorganism
+	35000.0,      # 6  Microorganism -> Insect
+	80000.0,      # 7  Insect -> Small Animal
+	180000.0,     # 8  Small Animal -> Human
+	400000.0,     # 9  Human -> Vehicle
+	900000.0,     # 10 Vehicle -> City
+	2000000.0,    # 11 City -> Geographic
+	5000000.0,    # 12 Geographic -> Planetary
+	12000000.0,   # 13 Planetary -> Stellar
+	30000000.0,   # 14 Stellar -> Galactic
+	80000000.0,   # 15 Galactic -> Cosmic
+	200000000.0,  # 16 Cosmic -> Universal
+	9999999999.0, # 17 Universal (max)
+]
 const SCALE_COLORS: Array[Color] = [
-	Color(0.3, 0.5, 1.0),    # Subatomic: blue-white
-	Color(0.2, 1.0, 0.6),    # Atomic: cyan-green
-	Color(1.0, 0.5, 0.1),    # Molecular: orange
-	Color(0.9, 0.2, 0.5),    # Cellular: pink-red
-	Color(0.7, 0.4, 1.0),    # Planetary: purple
+	Color(0.27, 0.27, 0.53),  # Quantum Foam: deep indigo
+	Color(0.3, 0.5, 1.0),     # Subatomic: blue-white
+	Color(0.0, 0.8, 1.0),     # Atomic: cyan
+	Color(0.27, 1.0, 0.67),   # Molecular: green-cyan
+	Color(1.0, 0.0, 0.4),     # Viral: hot pink
+	Color(0.27, 1.0, 0.27),   # Bacterial: bright green
+	Color(0.0, 1.0, 0.53),    # Microorganism: sea green
+	Color(0.67, 0.53, 0.2),   # Insect: amber
+	Color(0.27, 0.53, 0.8),   # Small Animal: blue
+	Color(1.0, 0.8, 0.53),    # Human: warm skin
+	Color(0.67, 0.67, 0.67),  # Vehicle: silver
+	Color(1.0, 1.0, 0.27),    # City: yellow
+	Color(0.1, 0.4, 0.27),    # Geographic: forest green
+	Color(0.27, 0.4, 0.67),   # Planetary: slate blue
+	Color(1.0, 0.67, 0.13),   # Stellar: golden
+	Color(0.53, 0.27, 0.8),   # Galactic: violet
+	Color(0.4, 0.8, 1.0),     # Cosmic: light blue
+	Color(1.0, 1.0, 1.0),     # Universal: white
 ]
 
 # Player starting radius

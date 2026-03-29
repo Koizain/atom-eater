@@ -498,24 +498,18 @@ func _return_to_pool(entity: Area2D) -> void:
 
 func refresh_for_scale(scale_idx: int) -> void:
 	current_scale_index = scale_idx
-	match scale_idx:
-		0:  # Subatomic
-			toxic_chance = 0.0
-			difficulty_time = 0.0
-			max_active = 60
-		1:  # Atomic
-			toxic_chance = 0.0
-			difficulty_time = 20.0
-			max_active = 70
-		2:  # Molecular
-			toxic_chance = 0.15
-			max_active = 80
-		3:  # Cellular
-			toxic_chance = 0.20
-			max_active = 90
-		4:  # Planetary
-			toxic_chance = 0.25
-			max_active = 100
+	# Scale-based difficulty: toxic chance ramps from 0 to 0.30, max_active from 60 to 120
+	if scale_idx <= 1:
+		toxic_chance = 0.0
+	else:
+		toxic_chance = clampf(float(scale_idx - 1) * 0.025, 0.0, 0.30)
+	max_active = clampi(60 + scale_idx * 4, 60, 120)
+	if scale_idx == 0:
+		difficulty_time = 0.0
+	elif scale_idx <= 2:
+		difficulty_time = 20.0
+	else:
+		difficulty_time = 30.0
 
 	# Clear active entities on scale change
 	for entity in active_entities:
